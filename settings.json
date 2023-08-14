@@ -6,7 +6,10 @@
   "TARGET_WIDTH": 1638, // Enter "1597" for iPad or "1638" for iPhone/Android
   "TARGET_HEIGHT": 752, // Enter "1198" for iPad or "752" for iPhone/Android
 
-  //upper left quadrant of windows, 1080p airplay on iPhone6
+  // These 4 numbers describe the region of interest for the metric
+  // The first two numbers are the X,Y coordinates of the upper left corner of the metric.
+  // 0,0 would be the upper left corner of the screen mirrored window
+  // The next two numbers are the Width and Height of the metric
   "ROI1" : " 136 , 367 , 87 , 56 ",  // Ball Speed
   "ROI2" : " 640 , 272 , 110 , 53 ", // Spin Rate
   "ROI3" : " 642 , 371 , 93 , 52 ",  // Spin Axis
@@ -14,7 +17,15 @@
   "ROI5" : " 126 , 464 , 107 , 56 ", // Launch Angle (HLA)
   "ROI6" : " 304 , 371 , 87 , 54 ",  // Club Speed
 
- // "DISABLE_PUTTING" : 1,	// uncomment this and set to 1 to prevent Putting server from running
+  // Putting modes
+  // 0: disable putting completely
+  // 1: (default) webcam putting, using https://github.com/alleexx/cam-putting-py/releases
+  // "PUTTING_MODE" : 1
+  
+  // Putting options
+  // 0: (default) no options
+  // 1: don't change window focus when putting
+  //  "PUTTING_OPTIONS" : 0
   
   "METRIC": "Yards" // (Leave as is) - If you want metric instead of imperial, change it in GSPro itself
 }

@@ -20,6 +20,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import threading
 from queue import Queue
 import select
+from pywinauto import application
 
 shot_q = Queue()
 putter_in_use = False
@@ -126,7 +127,8 @@ WINDOW_NAME = settings.get("WINDOW_NAME")
 TARGET_WIDTH = settings.get("TARGET_WIDTH")
 TARGET_HEIGHT = settings.get("TARGET_HEIGHT")
 METRIC = settings.get("METRIC")
-PUTT_DISABLED = settings.get("DISABLE_PUTTING")
+PUTTING_MODE = settings.get("PUTTING_MODE")
+PUTTING_OPTIONS = settings.get("PUTTING_OPTIONS")
 
 rois = []
 # Fill rois array from the json.  If ROI1 is present, assume they all are
@@ -145,8 +147,10 @@ if not HOST:
     HOST="127.0.0.1"
 if not METRIC:
     METRIC="Yards"
-if not PUTT_DISABLED:
-    PUTT_DISABLED = 0;   # means enabled
+if not PUTTING_MODE:
+    PUTTING_MODE = 1;     # 1 means enable webcam server
+if not PUTTING_OPTIONS:
+    PUTTING_OPTIONS = 0;  # 0 means control window focus when putting
     
 class Color:
     RESET = '\033[0m'
@@ -199,14 +203,25 @@ def process_gspro(resp):
             msg = json.loads(this_json)
             if msg['Code'] == 200 :
                 code_200_found = True
-            if msg['Code'] == 201 :
+            if msg['Code'] == 201 and PUTTING_MODE != 0:
                 #print(msg)
-                if msg['Player']['Club'] == "PT" and not putter_in_use:
-                    print_colored_prefix(Color.GREEN, "GSPRO ||", "Putting Mode")
+                if msg['Player']['Club'] == "PT":
+                    if PUTTING_OPTIONS != 1:
+                        app = application.Application()
+                        app.connect(title_re="Putting View.*")
+                        app_dialog = app.top_window()
+                        app_dialog.set_focus()
+                    if not putter_in_use:                    
+                        print_colored_prefix(Color.GREEN, "MLM2PRO Connector ||", "Putting Mode")
                     putter_in_use = True
                 else:
                     if msg['Player']['Club'] != "PT" and putter_in_use:
-                        print_colored_prefix(Color.GREEN, "GSPRO ||", "Full-shot Mode")
+                        print_colored_prefix(Color.GREEN, "MLM2PRO Connector ||", "Full-shot Mode")
+                        if PUTTING_OPTIONS != 1:
+                            app = application.Application()
+                            app.connect(title="GSPro")
+                            app_dialog = app.top_window()
+                            app_dialog.set_focus()
                         putter_in_use = False
     return code_200_found
     
@@ -215,13 +230,6 @@ def send_shots():
     BUFF_SIZE=1024
     POLL_TIME=10   # seconds to wait for shot ack
     
-    # Check if we have a shot to send.  If not, we can return
-    try:
-        message = shot_q.get_nowait()
-    except:
-        # No shot to send
-        return
-    
     try:
         if send_shots.create_socket:
             send_shots.sock = create_socket_connection(HOST, PORT)
@@ -229,15 +237,22 @@ def send_shots():
 
     
         # Check if we recevied any unsollicited messages from GSPRO (e.g. change of club)
-        read_ready, _, _ = select.select([send_shots.sock], [], [], .1)
+        read_ready, _, _ = select.select([send_shots.sock], [], [], 0)
         data = bytes(0)
         while read_ready:
             data = data + send_shots.sock.recv(BUFF_SIZE)
-            read_ready, _, _ = select.select([send_shots.sock], [], [], .1)
+            read_ready, _, _ = select.select([send_shots.sock], [], [], 0)
         if len(data) > 0 :
             #print(f"rec'd when idle:\n{data}")
             process_gspro(data) # don't need return value at this stage
 
+        # Check if we have a shot to send.  If not, we can return
+        try:
+            message = shot_q.get_nowait()
+        except:
+            # No shot to send
+            return
+        
         ball_speed = message['BallData']['Speed']
         total_spin = message['BallData']['TotalSpin']
         spin_axis = message['BallData']['SpinAxis']
@@ -254,14 +269,14 @@ def send_shots():
         stop_time = time.time() + POLL_TIME # wait for ack
         got_ack = False
         while time.time() < stop_time:
-            read_ready, _, _ = select.select([send_shots.sock], [], [], .5)
+            read_ready, _, _ = select.select([send_shots.sock], [], [], 0)
             if not read_ready:
                 continue
             
             data = bytes(0)
             while read_ready:
                 data = data + send_shots.sock.recv(BUFF_SIZE) # Note, we know there's a response now        
-                read_ready, _, _ = select.select([send_shots.sock], [], [], .5)
+                read_ready, _, _ = select.select([send_shots.sock], [], [], 0)
 
             # we have a complete message now, but it may not have our ack yet
             if process_gspro(data):
@@ -464,7 +479,7 @@ def main():
             send_shots.sock.close()
             print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "Socket connection closed...")
 
-        if PUTT_DISABLED != 1:
+        if PUTTING_MODE == 1:
             putt_server.stop()
             
         print_colored_prefix(Color.BLUE,"NOTE:" , "If you get an unhandled exception popup from Microsoft\
@@ -472,7 +487,7 @@ def main():
 
 if __name__ == "__main__":
     putt_server = PuttServer()
-    if PUTT_DISABLED != 1:
+    if PUTTING_MODE == 1:
         putt_server.start()
     time.sleep(1)
     plt.ion()  # Turn interactive mode on.

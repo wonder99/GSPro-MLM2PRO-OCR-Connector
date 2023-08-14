@@ -45,4 +45,5 @@ Steps:
 11. Optional for putting: start the ball_tracking.exe from its installation directory.  Don't forget to specify your ball color preference on the command line (with -c <color>).  Note, -c calibrate is a handy utility to determine which color setting is best for your setup
 11. Done!
 
+NOTE: If you'd like console message to appear in color, double-click the console_colors.reg file included here
 NOTE: Make sure to have GSPro, GSPro Connect and the AirPlay receiver app open and running before opening the MLM2PROConnectorV2.exe app otherwise it will just close instantly after pressing enter to confirm your first shot.
