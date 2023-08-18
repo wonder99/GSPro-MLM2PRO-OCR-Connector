@@ -5,6 +5,7 @@ from ctypes import windll
 import win32gui
 import win32ui
 import matplotlib.pyplot as plt
+import time
 
 w = -1
 h = -1
@@ -27,26 +28,18 @@ def capture_window(window_name: str, target_width: int, target_height: int) -> n
     if shown_window_failure:
         print(f"Found window called '{window_name}'")
         shown_window_failure = False
+        # wait a bit for the client rect to be drawn
+        time.sleep(1)
     
     rect = win32gui.GetClientRect(hwnd)
-    if w == -1 :
-        w = rect[2] - rect[0]
-        h = rect[3] - rect[1]
-    else :
-        if not (w == rect[2] - rect[0] and h == rect[3] - rect[0]) :
-           if not shown_size_failure:
-                shown_size_failure = True
-                print(f"Target window ({window_name}) size has changed to {rect[2] - rect[0]}x{rect[3] - rect[1]}, not {w}x{h}")
-           raise RuntimeError(f"Please fix size of window {window_name}")
-    if shown_size_failure:
-        print(f"Window '{window_name}' is now the correct size")
-        shown_size_failure = False
+    w = rect[2] - rect[0]
+    h = rect[3] - rect[1]
 
     if not (w==target_width and h==target_height) :
         if not shown_target_failure:
             shown_target_failure = True
             print(f"Warning: dimensions seem wrong {w}x{h} vs json:{target_width}x{target_height}")
-        raise RuntimeError("Try fixing screen mirror dimensions")
+        raise RuntimeError(f"Try changing screen mirror dimensions to {target_width}x{target_height}")
     else :
         if shown_target_failure:
             shown_target_failure = False

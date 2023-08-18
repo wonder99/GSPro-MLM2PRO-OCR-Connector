@@ -129,6 +129,7 @@ TARGET_HEIGHT = settings.get("TARGET_HEIGHT")
 METRIC = settings.get("METRIC")
 PUTTING_MODE = settings.get("PUTTING_MODE")
 PUTTING_OPTIONS = settings.get("PUTTING_OPTIONS")
+EXTRA_DEBUG = settings.get("EXTRA_DEBUG")
 
 rois = []
 # Fill rois array from the json.  If ROI1 is present, assume they all are
@@ -207,10 +208,18 @@ def process_gspro(resp):
                 #print(msg)
                 if msg['Player']['Club'] == "PT":
                     if PUTTING_OPTIONS != 1:
-                        app = application.Application()
-                        app.connect(title_re="Putting View.*")
-                        app_dialog = app.top_window()
-                        app_dialog.set_focus()
+                        try:
+                            app = application.Application()
+                            app.connect(title_re=".*Putting View.*")
+                            app_dialog = app.top_window()
+                            app_dialog.set_focus()
+                        except Exception as e:
+                            print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "Unable to find Putting View window")
+                            if EXTRA_DEBUG == 1:
+                                print(f"Exception: {e}")
+                                for win in application.findwindows.find_elements():
+                                    if 'PUTT' in str(win).upper():
+                                        print(str(win))
                     if not putter_in_use:                    
                         print_colored_prefix(Color.GREEN, "MLM2PRO Connector ||", "Putting Mode")
                     putter_in_use = True
@@ -218,10 +227,19 @@ def process_gspro(resp):
                     if msg['Player']['Club'] != "PT" and putter_in_use:
                         print_colored_prefix(Color.GREEN, "MLM2PRO Connector ||", "Full-shot Mode")
                         if PUTTING_OPTIONS != 1:
-                            app = application.Application()
-                            app.connect(title="GSPro")
-                            app_dialog = app.top_window()
-                            app_dialog.set_focus()
+                            try:
+                                app = application.Application()
+                                app.connect(title="GSPro")
+                                app_dialog = app.top_window()
+                                app_dialog.set_focus()
+                            except Exception as e:
+                                print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "Unable to find GSPRO window")
+                                if EXTRA_DEBUG == 1:
+                                    print(f"Exception: {e}")
+                                    for win in application.findwindows.find_elements():
+                                        if 'GSPRO' in str(win).upper():
+                                            print(str(win))
+
                         putter_in_use = False
     return code_200_found
     

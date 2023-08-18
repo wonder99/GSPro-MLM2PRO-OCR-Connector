@@ -20,12 +20,12 @@
   // Putting modes
   // 0: disable putting completely
   // 1: (default) webcam putting, using https://github.com/alleexx/cam-putting-py/releases
-  // "PUTTING_MODE" : 1
+  // "PUTTING_MODE" : 1,
   
   // Putting options
   // 0: (default) no options
   // 1: don't change window focus when putting
-  //  "PUTTING_OPTIONS" : 0
+  //  "PUTTING_OPTIONS" : 0,
   
   "METRIC": "Yards" // (Leave as is) - If you want metric instead of imperial, change it in GSPro itself
 }
