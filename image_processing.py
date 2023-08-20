@@ -38,7 +38,7 @@ def capture_window(window_name: str, target_width: int, target_height: int) -> n
     if not (w==target_width and h==target_height) :
         if not shown_target_failure:
             shown_target_failure = True
-            print(f"Warning: dimensions seem wrong {w}x{h} vs json:{target_width}x{target_height}")
+            print(f"Warning: Window {window_name} dimensions seem wrong {w}x{h} vs json:{target_width}x{target_height}")
         raise RuntimeError(f"Try changing screen mirror dimensions to {target_width}x{target_height}")
     else :
         if shown_target_failure:

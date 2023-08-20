@@ -21,6 +21,7 @@ import threading
 from queue import Queue
 import select
 from pywinauto import application
+import psutil
 
 shot_q = Queue()
 putter_in_use = False
@@ -29,7 +30,7 @@ class PuttHandler(BaseHTTPRequestHandler):
     
     def do_POST(self):
         length = int(self.headers.get('content-length'))
-        if length > 0 and putter_in_use:
+        if length > 0 and gsp_stat.Putter:
             response_code = 200
             message = '{"result" : "OK"}'
             res = json.loads(self.rfile.read(length))
@@ -56,10 +57,12 @@ class PuttHandler(BaseHTTPRequestHandler):
             putt['BallData']['VLA'] = 0
             putt['ClubData'] = {}
             putt['ClubData']['Speed'] = float(res['ballData']['BallSpeed'])
+            putt['ClubData']['Path'] = 0
+            putt['ClubData']['FaceToTarget'] = 0
             shot_q.put(putt)
 
         else:
-            if not putter_in_use:
+            if not gsp_stat.Putter:
                 print_colored_prefix(Color.RED, "Putting Server ||", "Ignoring detected putt, since putter isn't selected")
             response_code = 500
             message = '{"result" : "ERROR"}'
@@ -127,9 +130,13 @@ WINDOW_NAME = settings.get("WINDOW_NAME")
 TARGET_WIDTH = settings.get("TARGET_WIDTH")
 TARGET_HEIGHT = settings.get("TARGET_HEIGHT")
 METRIC = settings.get("METRIC")
+EX_WINDOW_NAME = settings.get("EX_WINDOW_NAME")
+EX_TARGET_WIDTH = settings.get("EX_TARGET_WIDTH")
+EX_TARGET_HEIGHT = settings.get("EX_TARGET_HEIGHT")
 PUTTING_MODE = settings.get("PUTTING_MODE")
 PUTTING_OPTIONS = settings.get("PUTTING_OPTIONS")
 EXTRA_DEBUG = settings.get("EXTRA_DEBUG")
+BALL_TRACKING_OPTIONS = settings.get("BALL_TRACKING_OPTIONS")
 
 rois = []
 # Fill rois array from the json.  If ROI1 is present, assume they all are
@@ -141,6 +148,16 @@ if settings.get("ROI1") :
     rois.append(list(map(int,settings.get("ROI5").split(','))))
     rois.append(list(map(int,settings.get("ROI6").split(','))))
     print("Imported ROIs from JSON")
+
+ex_rois = []
+# Fill rois array from the json.  If ROI1 is present, assume they all are
+if settings.get("EX_ROI1") :
+    ex_rois.append(list(map(int,settings.get("EX_ROI1").split(','))))
+    ex_rois.append(list(map(int,settings.get("EX_ROI2").split(','))))
+    ex_rois.append(list(map(int,settings.get("EX_ROI3").split(','))))
+    ex_rois.append(list(map(int,settings.get("EX_ROI4").split(','))))
+    #ex_rois.append(list(map(int,settings.get("EX_ROI5").split(','))))
+    print("Imported Putting ROIs from JSON")
  
 if not PORT:
     PORT=921
@@ -192,8 +209,34 @@ def recognize_roi(screenshot, roi):
     else :
         return cleaned_result[0]
 
+def recognize_putt_roi(screenshot, roi):
+    # crop the roi from screenshot
+    cropped_img = screenshot[roi[1]:roi[1]+roi[3], roi[0]:roi[0]+roi[2]]
+    # use tesseract to recognize the text
+    api.SetImage(Image.fromarray(cropped_img))
+    result = api.GetUTF8Text()
+    #print(f"debug res: {result}")
+    # strip any trailing periods, and keep only one decimal place
+    cleaned_result = re.findall(r"[LR]?(?:\d*\.*\d)", result)
+
+    if len(cleaned_result) == 0:
+        return '-' # didn't find a valid number
+    else :
+        return cleaned_result[0]
+    
+class c_GSPRO_Status:
+    Ready = True
+    ShotReceived = False
+    ReadyTime = 0
+    Putter = False
+    DistToPin = 200
+
+gsp_stat = c_GSPRO_Status()
+gsp_stat.Putter = False
+
 def process_gspro(resp):
     global putter_in_use
+    global gsp_stat
 
     code_200_found = False
 
@@ -203,35 +246,44 @@ def process_gspro(resp):
             #print(this_json)
             msg = json.loads(this_json)
             if msg['Code'] == 200 :
+                gsp_stat.ShotReceived = True
                 code_200_found = True
-            if msg['Code'] == 201 and PUTTING_MODE != 0:
-                #print(msg)
-                if msg['Player']['Club'] == "PT":
-                    if PUTTING_OPTIONS != 1:
-                        try:
-                            app = application.Application()
-                            app.connect(title_re=".*Putting View.*")
-                            app_dialog = app.top_window()
-                            app_dialog.set_focus()
-                        except Exception as e:
-                            print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "Unable to find Putting View window")
-                            if EXTRA_DEBUG == 1:
-                                print(f"Exception: {e}")
-                                for win in application.findwindows.find_elements():
-                                    if 'PUTT' in str(win).upper():
-                                        print(str(win))
-                    if not putter_in_use:                    
-                        print_colored_prefix(Color.GREEN, "MLM2PRO Connector ||", "Putting Mode")
-                    putter_in_use = True
-                else:
-                    if msg['Player']['Club'] != "PT" and putter_in_use:
-                        print_colored_prefix(Color.GREEN, "MLM2PRO Connector ||", "Full-shot Mode")
-                        if PUTTING_OPTIONS != 1:
+            if msg['Code'] == 201:
+                gsp_stat.Ready = True
+                gsp_stat.ReadyTime = time.time()
+                gsp_stat.DistToPin = msg['Player']['DistanceToTarget']
+                if PUTTING_MODE != 0:
+                    #print(msg)
+                    if msg['Player']['Club'] == "PT":
+                        if not gsp_stat.Putter:                    
+                            print_colored_prefix(Color.GREEN, "MLM2PRO Connector ||", "Putting Mode")
+                            gsp_stat.Putter = True
+                        if PUTTING_MODE ==1 and PUTTING_OPTIONS != 1:
                             try:
                                 app = application.Application()
-                                app.connect(title="GSPro")
+                                pid=application.findwindows.find_window(title_re='Putting View:.*')
+                                app.connect(handle=pid)
                                 app_dialog = app.top_window()
                                 app_dialog.set_focus()
+                            except Exception as e:
+                                print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "Unable to find Putting View window")
+                                if EXTRA_DEBUG == 1:
+                                    print(f"Exception: {e}")
+                                    for win in application.findwindows.find_elements():
+                                        if 'PUTTING VIEW' in str(win).upper():
+                                            print(str(win))
+                    else:
+                        if gsp_stat.Putter:
+                            print_colored_prefix(Color.GREEN, "MLM2PRO Connector ||", "Full-shot Mode")
+                            gsp_stat.Putter = False
+                        if PUTTING_MODE == 1 and PUTTING_OPTIONS != 1:
+                            try:
+                                app = application.Application()
+                                pid=application.findwindows.find_window(title='GSPro')
+                                app.connect(handle=pid)
+                                app_dialog = app.top_window()
+                                if not app_dialog.has_focus():
+                                    app_dialog.set_focus()
                             except Exception as e:
                                 print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "Unable to find GSPRO window")
                                 if EXTRA_DEBUG == 1:
@@ -240,11 +292,11 @@ def process_gspro(resp):
                                         if 'GSPRO' in str(win).upper():
                                             print(str(win))
 
-                        putter_in_use = False
     return code_200_found
     
 def send_shots():
     global putter_in_use
+    global gsp_stat
     BUFF_SIZE=1024
     POLL_TIME=10   # seconds to wait for shot ack
     
@@ -252,7 +304,6 @@ def send_shots():
         if send_shots.create_socket:
             send_shots.sock = create_socket_connection(HOST, PORT)
             send_shots.create_socket = False
-
     
         # Check if we recevied any unsollicited messages from GSPRO (e.g. change of club)
         read_ready, _, _ = select.select([send_shots.sock], [], [], 0)
@@ -267,23 +318,31 @@ def send_shots():
         # Check if we have a shot to send.  If not, we can return
         try:
             message = shot_q.get_nowait()
-        except:
+        except Exception as e:
             # No shot to send
             return
-        
+
         ball_speed = message['BallData']['Speed']
         total_spin = message['BallData']['TotalSpin']
         spin_axis = message['BallData']['SpinAxis']
         hla= message['BallData']['HLA']
         vla= message['BallData']['VLA']
         club_speed= message['ClubData']['Speed']
+        path_angle= message['ClubData']['Path']
+        face_angle= message['ClubData']['FaceToTarget']
         message['ShotNumber'] = send_shots.shot_count
+
+        # Ready to send.  Clear the received flag and send it
+        gsp_stat.ShotReceived = False
+        gsp_stat.Ready = False
         send_shots.sock.sendall(json.dumps(message).encode())
-        print_colored_prefix(Color.GREEN,"MLM2PRO Connector ||", f"Shot {send_shots.shot_count} - Ball Speed: {ball_speed} MPH, Total Spin: {total_spin} RPM, Spin Axis: {spin_axis}°, HLA: {hla}°, VLA: {vla}°, Club Speed: {club_speed} MPH")
+        if gsp_stat.Putter:
+            print_colored_prefix(Color.GREEN,"MLM2PRO Connector ||", f"Putt {send_shots.shot_count} - Ball: {ball_speed} MPH, HLA: {hla}°, Path: {path_angle}°, Face: {face_angle}°")
+        else:
+            print_colored_prefix(Color.GREEN,"MLM2PRO Connector ||", f"Shot {send_shots.shot_count} - Ball: {ball_speed} MPH, Spin: {total_spin} RPM, Axis: {spin_axis}°, HLA: {hla}°, VLA: {vla}°, Club: {club_speed} MPH")
         send_shots.shot_count += 1
 
         # Poll politely until there is a message received on the socket
-
         stop_time = time.time() + POLL_TIME # wait for ack
         got_ack = False
         while time.time() < stop_time:
@@ -306,11 +365,11 @@ def send_shots():
                 break
 
         if not got_ack:
-            #print("no ack")
+            print("debug: no ack")
             raise Exception
  
     except Exception as e:
-        #print(e)
+        print(f"debug: {e}")
         print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "No response from GSPRO. Retrying")
         if not send_shots.gspro_connection_notified:
             Sounds.all_dashes.play()
@@ -325,11 +384,23 @@ send_shots.create_socket = True
 send_shots.sock = None
 
 def main():
-    AUTOSHOT_DELAY = 8 # number of seconds between automatic shots
+    global api
+    AUTOSHOT_DELAY = 4 # number of seconds between automatic shots
     try:
+
         input("- Press enter after you've hit your first shot. -")
 
-        ball_speed_last = total_spin_last = spin_axis_last = hla_last = vla_last = club_speed = None
+        found = False
+        while not found:
+            for proc in psutil.process_iter():
+                if 'GSPconnect.exe' == proc.name():
+                    found = True
+                    break
+            if not found:
+                print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "GSPconnect.exe is not running. Reset it via GSPRO->Settings->Game->Reset GSPro Connect->Save")
+                input("- Press enter after you've hit your first shot. -")
+
+        club_speed = ball_speed_last = total_spin_last = spin_axis_last = hla_last = vla_last = club_speed_last = path_angle_last = face_angle_last = None
         screenshot_attempts = 0
         incomplete_data_displayed = False
         ready_message_displayed = False
@@ -369,35 +440,136 @@ def main():
                 i=i+1
             print()
 
-        #create_socket = True
-        last_auto_time = 0
-        while True:
-
-            # send any pending shots from the queue.  Will block while awaiting shot responses
-            send_shots()
-            
-            # Run capture_window function in a separate thread
-            if test_mode != TestModes.auto_shot:
+        if PUTTING_MODE == 2:   # Ex-Putt
+            if len(ex_rois) == 0 :
+                input("- Press enter after you've hit your first putt. -")
                 while True :
                     try:
-                        future_screenshot = executor.submit(capture_window, WINDOW_NAME, TARGET_WIDTH, TARGET_HEIGHT)
+                        future_screenshot = executor.submit(capture_window, EX_WINDOW_NAME, EX_TARGET_WIDTH, EX_TARGET_HEIGHT)
                         screenshot = future_screenshot.result()
                         break
                     except Exception as e:
                         print(f"{e}. Retrying")
                     time.sleep(1)
 
-                result = []
-                for roi in rois:
-                    result.append(recognize_roi(screenshot, roi))
+                values = ["Ball Speed", "Launch Direction", "Path", "Impact Angle"]
+                for value in values:
+                    print(f"Please select the ROI for {value}.")
+                    roi = select_roi(screenshot)
+                    ex_rois.append(roi)
+                print("You can paste these lines into JSON")
+                i = 1
+                for roi in ex_rois:
+                    print(f" \"EX_ROI{i}\" : \"", roi[0],",",roi[1],",",roi[2],",",roi[3],"\",",end='')
+                    print(f"\t// {values[i-1]}")
+                    i=i+1
+                print()
+
+        if PUTTING_MODE == 1:
+            exe = 'ball_tracking.exe'
+            if BALL_TRACKING_OPTIONS is None:
+                opt = 'none'
             else:
-                if time.time() - last_auto_time > AUTOSHOT_DELAY:
-                    result = [random.randint(30,140), random.randint(1000,2000), random.randint(-10,10),0,15,80] # fake shot data
-                    last_auto_time = time.time()
+                opt = exe + " " + BALL_TRACKING_OPTIONS
+            try:
+                
+                os.spawnl(os.P_DETACH, exe, opt)
+            except FileNotFoundError:
+                print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Could not find {exe} in the current directory")
 
-            ball_speed, total_spin, spin_axis, hla, vla, club_speed = map(str, result)
+        putter_in_use_last = False
+        while True:
 
-            # Check if any values are incomplete/incorrect            
+            # send any pending shots from the queue.  Will block while awaiting shot responses
+            send_shots()
+            if not gsp_stat.Putter:            
+                # Run capture_window function in a separate thread
+                if test_mode != TestModes.auto_shot:
+                    while True :
+                        try:
+                            future_screenshot = executor.submit(capture_window, WINDOW_NAME, TARGET_WIDTH, TARGET_HEIGHT)
+                            screenshot = future_screenshot.result()
+                            break
+                        except Exception as e:
+                            print(f"{e}. Retrying")
+                        time.sleep(1)
+
+                    api = tesserocr.PyTessBaseAPI(psm=tesserocr.PSM.SINGLE_WORD, lang='train', path=tesserocr.tesseract_cmd)
+                    result = []
+                    for roi in rois:
+                        result.append(recognize_roi(screenshot, roi))
+                    ball_speed, total_spin, spin_axis, hla, vla, club_speed = map(str, result)
+                else :
+                    if gsp_stat.Ready and (time.time() - gsp_stat.ReadyTime) > AUTOSHOT_DELAY:
+                        d = gsp_stat.DistToPin
+                        if d > 300:
+                            d = 300
+                        if gsp_stat.Putter:
+                            result = [1.5*d, 0, 0,random.randint(-2,2),0,4] # fake shot data
+                        else:
+                            result = [round(d/1.95+20), round(-26.6*d+10700), random.randint(-3,3),random.randint(-2,2),round(-0.1*d+41),round((d/1.85+20)/1.5)] # fake shot data
+                        ball_speed, total_spin, spin_axis, hla, vla, club_speed = map(str, result)
+
+                #print(f"h1 res{result}")
+                path_angle = 0
+                face_angle = 0
+            else: # putter is in use
+                if PUTTING_MODE == 2: # HDMI capture, such as ExPutt
+                    while True :
+                        try:
+                            future_screenshot = executor.submit(capture_window, EX_WINDOW_NAME, EX_TARGET_WIDTH, EX_TARGET_HEIGHT)
+                            screenshot = future_screenshot.result()
+                            break
+                        except Exception as e:
+                            print(f"{e}. Retrying capture of putting screen")
+                        time.sleep(1)
+                    api = tesserocr.PyTessBaseAPI(psm=tesserocr.PSM.SINGLE_WORD, lang='exputt', path=tesserocr.tesseract_cmd)            
+                    result = []
+                    for roi in ex_rois:
+                        result.append(recognize_putt_roi(screenshot, roi))
+                    #print(f"cleaned {result}")
+                    ball_speed, hla, path_angle, face_angle = map(str, result)
+                    try:
+                        ball_speed = float(ball_speed)
+                        if hla[0] == 'L':
+                            hla = -float(hla[1:])
+                        else:
+                            hla = float(hla[1:])
+                        if ball_speed == 0 or ball_speed > 40 or hla < -20 or hla > 20:
+                            raise ValueError
+                        if path_angle == '-':
+                            path_angle = 0
+                        else:
+                            if path_angle[0] == 'L':
+                                # left, negative for GSPRO
+                                path_angle = -float(path_angle[1:])
+                            else:
+                                path_angle = float(path_angle[1:])
+                        if face_angle == '-':
+                            face_angle = 0
+                        else:
+                            if face_angle[0] == 'L':
+                                # left, negative for GSPRO
+                                face_angle = -float(face_angle[1:])
+                            else:
+                                face_angle = float(face_angle[1:])
+                    except Exception as e:
+                        if EXTRA_DEBUG:
+                            print(f"Ignoring bad put reading. Result {result} Exception: {e}") # todo, this should be silent
+                        shot_ready = False
+                        time.sleep(.5)
+                        continue
+                    except Exception as e:
+                        print(e)
+                        shot_ready = False
+                        time.sleep(.5)
+                        continue
+                    club_speed = ball_speed
+                    total_spin = 0
+                    spin_axis = 0
+                    vla = 0
+
+            # Check if any values are incomplete/incorrect
             try:
                 sound_to_play = Sounds.bad_capture # default error sound
                 if ball_speed == '-' and total_spin == '-' and spin_axis == '-' and hla == '-' and vla == '-' and club_speed == '-':
@@ -411,26 +583,43 @@ def main():
                 hla = float(hla)
                 vla = float(vla)
                 club_speed = float(club_speed)
-
                 # HLA and spin axis could well be 0.0
-                if ball_speed == 0.0 or total_spin == 0.0 or vla == 0.0 or club_speed == 0.0:
-                    raise ValueError("A value is 0")
+                if ball_speed == 0.0 or club_speed == 0.0:
+                    raise ValueError("Club or ball speed was 0")
 
                 incomplete_data_displayed = False
                 shot_ready = True
-            except ValueError:
+            except Exception as e:
+                #print(e)
+                #print_colored_prefix(Color.RED,"MLM2PRO Connector ||", f"* Ball: {ball_speed} MPH, Spin: {total_spin} RPM, Axis: {spin_axis}°, HLA: {hla}°, VLA: {vla}°, Club: {club_speed} MPH, Path: {path_angle}°, Face: {face_angle}°")
                 if not incomplete_data_displayed:
                     screenshot_attempts += 1
                     sound_to_play.play()
                     print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "Invalid or incomplete data detected:")
-                    print_colored_prefix(Color.RED,"MLM2PRO Connector ||", f"* Ball Speed: {ball_speed} MPH, Total Spin: {total_spin} RPM, Spin Axis: {spin_axis}°, HLA: {hla}°, VLA: {vla}°, Club Speed: {club_speed} MPH")
+                    print_colored_prefix(Color.RED,"MLM2PRO Connector ||", f"* Ball: {ball_speed} MPH, Spin: {total_spin} RPM, Axis: {spin_axis}°, HLA: {hla}°, VLA: {vla}°, Club: {club_speed} MPH, Path: {path_angle}°, Face: {face_angle}°")
                     incomplete_data_displayed = True
+                shot_ready = False
+                continue
+
+            # if we just switched modes, make sure we don't submit a shot immediately
+            if putter_in_use_last != gsp_stat.Putter:
+                # changed modes
+                ball_speed_last = ball_speed
+                total_spin_last = total_spin
+                spin_axis_last = spin_axis
+                hla_last = hla
+                vla_last = vla
+                club_speed_last = club_speed
+                path_angle_last = path_angle
+                face_angle_last = face_angle
+                putter_in_use_last = gsp_stat.Putter
                 shot_ready = False
                 continue
 
             # check if values are the same as previous
             if shot_ready and (ball_speed == ball_speed_last and total_spin == total_spin_last and
-                spin_axis == spin_axis_last and hla == hla_last and vla == vla_last and club_speed == club_speed_last):
+                spin_axis == spin_axis_last and hla == hla_last and vla == vla_last and club_speed == club_speed_last and
+                path_angle == path_angle_last and face_angle == face_angle_last):
                 if not ready_message_displayed:
                     print_colored_prefix(Color.BLUE, "MLM2PRO Connector ||", "System ready, take a shot...")
                     ready_message_displayed = True
@@ -438,11 +627,10 @@ def main():
                 continue
 
             if (ball_speed != ball_speed_last or total_spin != total_spin_last or
-                    spin_axis != spin_axis_last or hla != hla_last or vla != vla_last or club_speed != club_speed_last):
+                    spin_axis != spin_axis_last or hla != hla_last or vla != vla_last or club_speed != club_speed_last or
+                path_angle != path_angle_last or face_angle != face_angle_last):
                 screenshot_attempts = 0  # Reset the attempt count when valid data is obtained
                 ready_message_displayed = False  # Reset the flag when data changes
-
-                #print_colored_prefix(Color.GREEN,"MLM2PRO Connector ||", f"Shot {send_shots.shot_count} - Ball Speed: {ball_speed} MPH, Total Spin: {total_spin} RPM, Spin Axis: {spin_axis}°, HLA: {hla}°, VLA: {vla}°, Club Speed: {club_speed} MPH")
 
                 message = {
                     "DeviceID": "Rapsodo MLM2PRO",
@@ -459,7 +647,9 @@ def main():
                         "VLA": float(vla)
                     },
                     "ClubData": {
-                        "Speed": float(club_speed)
+                        "Speed": float(club_speed),
+                        "Path": float(path_angle),
+                        "FaceToTarget": float(face_angle),
                     },
                     "ShotDataOptions": {
                         "ContainsBallData": True,
@@ -473,13 +663,14 @@ def main():
                 # Put this shot in the queue
                 shot_q.put(message)
                 send_shots()
-
                 ball_speed_last = ball_speed
                 total_spin_last = total_spin
                 spin_axis_last = spin_axis
                 hla_last = hla
                 vla_last = vla
                 club_speed_last = club_speed
+                path_angle_last = path_angle
+                face_angle_last = face_angle
             time.sleep(.5)
 
     except Exception as e:
@@ -487,6 +678,21 @@ def main():
     except KeyboardInterrupt:
         print("Ctrl-C pressed")
     finally:
+        # kill and restart the GSPconnector
+        path = 'none'
+        try:
+            for proc in psutil.process_iter():
+                if 'GSPconnect.exe' == proc.name():
+                    proc = psutil.Process(proc.pid)
+                    path=proc.exe()
+                    proc.terminate()
+#                    os.spawnl(os.P_DETACH, path, 'none')
+                    print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "Closed GSPconnect.exe.")
+                    break
+        except Exception as e:
+            print(f"Exception: Failed to close and relaunch GSPconnect.exe. {path} ({e})")
+            
+
         if api is not None:
             api.End()
             print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "Tesseract API ended...")
@@ -499,9 +705,19 @@ def main():
 
         if PUTTING_MODE == 1:
             putt_server.stop()
-            
-        print_colored_prefix(Color.BLUE,"NOTE:" , "If you get an unhandled exception popup from Microsoft\
-.NET framework, click Continue to allow relaunching of this connector")
+            closed = False
+            try:
+                # there are 2 such processes to kill, so don't break out when we close one
+                for proc in psutil.process_iter():
+                    if 'ball_tracking.exe' == proc.name():
+                        proc = psutil.Process(proc.pid)
+                        proc.terminate()
+                        closed = True
+                if closed:
+                    print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "Closed ball_tracking app")
+                        
+            except Exception as e:
+                print(f"Exception: Failed to close ball tracking app ({e})")
 
 if __name__ == "__main__":
     putt_server = PuttServer()
