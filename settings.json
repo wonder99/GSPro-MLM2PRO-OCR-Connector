@@ -16,28 +16,32 @@
  "ROI4" : " 1586 , 372 , 129 , 67 ",    // Launch Direction (HLA)
  "ROI5" : " 1586 , 225 , 125 , 68 ",    // Launch Angle (VLA)
  "ROI6" : " 187 , 672 , 92 , 71 ",      // Club Speed
- 
 
- "EX_WINDOW_NAME": "Camera", // Use windows Camera application to display input from HDMI/USB dongle
- "EX_TARGET_WIDTH": 1200, // Width
- "EX_TARGET_HEIGHT": 933, // Height
- "EX_ROI1" : " 972 , 238 , 77 , 34 ",   // Ball Speed
- "EX_ROI2" : " 964 , 322 , 96 , 34 ",   // Launch Direction
- "EX_ROI3" : " 971 , 491 , 80 , 36 ",   // Path
- "EX_ROI4" : " 966 , 576 , 84 , 34 ",   // Impact Angle
- 
+
  // Putting modes
   // 0: disable putting completely
   // 1: (default) webcam putting, using https://github.com/alleexx/cam-putting-py/releases
-  // 2: ExPutt or other HDMI putting capture.  Uses ROIs EX_ROI1 to EX_ROI5
+  // 2: ExPutt or other HDMI putting capture.  Uses ROIs EX_ROI1 through EX_ROI4
   "PUTTING_MODE" : 2,
-  "BALL_TRACKING_OPTIONS" : "-c orange2",
-  "EXTRA_DEBUG" : 1,
-  
+
   // Putting options
   // 0: (default) no options
-  // 1: don't change window focus when putting
-  //  "PUTTING_OPTIONS" : 0,
-  
+  // 1: don't change window focus when putting in webcam mode (PUTTING_MODE=1)
+  //  "PUTTING_OPTIONS" : 0, // remove slashes at the start to enable this line
+
+// Options for PUTTING_MODE 1
+  "BALL_TRACKING_OPTIONS" : "-c orange2",   // Only applies to PUTTING_MODE 1, webcam
+ 
+// Options for PUTTING_MODE 2
+ "EX_WINDOW_NAME": "Camera", // Use windows Camera application to display input from HDMI/USB dongle
+ "EX_TARGET_WIDTH": 1200, // Width
+ "EX_TARGET_HEIGHT": 933, // Height
+ // Paste EX_ROI lines here
+// "EX_ROI1" : " 972 , 238 , 77 , 34 ",   // Ball Speed
+// "EX_ROI2" : " 964 , 322 , 96 , 34 ",   // Launch Direction
+// "EX_ROI3" : " 971 , 491 , 80 , 36 ",   // Path
+// "EX_ROI4" : " 966 , 576 , 84 , 34 ",   // Impact Angle
+ // End of EX_ROI
+ 
   "METRIC": "Yards" // (Leave as is) - If you want metric instead of imperial, change it in GSPro itself
 }
