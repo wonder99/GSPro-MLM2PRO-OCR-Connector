@@ -2,46 +2,32 @@
   "HOST": "127.0.0.1", // OpenAPI IP (Leave as is)
   "PORT": 921, // OpenAPI Port (Leave as is)
 
-  "WINDOW_NAME": "TB310FU", // Enter either AirPlay (iOS) or EasyCast (Android)
-  "TARGET_WIDTH": 1920, // Enter "1920" for iPad or "1638" for iPhone/Android
-  "TARGET_HEIGHT": 1017, // Enter "1017" for iPad or "752" for iPhone/Android
+  "WINDOW_NAME": "AirPlay", // Enter either AirPlay (iOS) or EasyCast (Android)
+  "TARGET_WIDTH": 1638, // Enter "1597" for iPad or "1638" for iPhone/Android
+  "TARGET_HEIGHT": 752, // Enter "1198" for iPad or "752" for iPhone/Android
 
   // These 4 numbers describe the region of interest for the metric
   // The first two numbers are the X,Y coordinates of the upper left corner of the metric.
   // 0,0 would be the upper left corner of the screen mirrored window
   // The next two numbers are the Width and Height of the metric
- "ROI1" : " 187 , 525 , 98 , 65 ",      // Ball Speed
- "ROI2" : " 1585 , 670 , 145 , 71 ",    // Spin Rate
- "ROI3" : " 1580 , 817 , 132 , 72 ",    // Spin Axis
- "ROI4" : " 1586 , 372 , 129 , 67 ",    // Launch Direction (HLA)
- "ROI5" : " 1586 , 225 , 125 , 68 ",    // Launch Angle (VLA)
- "ROI6" : " 187 , 672 , 92 , 71 ",      // Club Speed
-
-
+  "ROI1" : " 136 , 367 , 87 , 56 ",  // Ball Speed
+  "ROI2" : " 640 , 272 , 110 , 53 ", // Spin Rate
+  "ROI3" : " 642 , 371 , 93 , 52 ",  // Spin Axis
+  "ROI4" : " 466 , 272 , 105 , 55 ", // Launch Direction (VLA)
+  "ROI5" : " 126 , 464 , 107 , 56 ", // Launch Angle (HLA)
+  "ROI6" : " 304 , 371 , 87 , 54 ",  // Club Speed
+ 
  // Putting modes
   // 0: disable putting completely
   // 1: (default) webcam putting, using https://github.com/alleexx/cam-putting-py/releases
-  // 2: ExPutt or other HDMI putting capture.  Uses ROIs EX_ROI1 through EX_ROI4
-  "PUTTING_MODE" : 2,
-
+  // 2: ExPutt or other HDMI putting capture.  Uses ROIs EX_ROI1 to EX_ROI5
+  "PUTTING_MODE" : 1,
+  "BALL_TRACKING_OPTIONS" : "-c orange2",
+  
   // Putting options
   // 0: (default) no options
-  // 1: don't change window focus when putting in webcam mode (PUTTING_MODE=1)
-  //  "PUTTING_OPTIONS" : 0, // remove slashes at the start to enable this line
-
-// Options for PUTTING_MODE 1
-  "BALL_TRACKING_OPTIONS" : "-c orange2",   // Only applies to PUTTING_MODE 1, webcam
- 
-// Options for PUTTING_MODE 2
- "EX_WINDOW_NAME": "Camera", // Use windows Camera application to display input from HDMI/USB dongle
- "EX_TARGET_WIDTH": 1200, // Width
- "EX_TARGET_HEIGHT": 933, // Height
- // Paste EX_ROI lines here
-// "EX_ROI1" : " 972 , 238 , 77 , 34 ",   // Ball Speed
-// "EX_ROI2" : " 964 , 322 , 96 , 34 ",   // Launch Direction
-// "EX_ROI3" : " 971 , 491 , 80 , 36 ",   // Path
-// "EX_ROI4" : " 966 , 576 , 84 , 34 ",   // Impact Angle
- // End of EX_ROI
- 
+  // 1: don't change window focus when putting
+  //  "PUTTING_OPTIONS" : 0,
+  
   "METRIC": "Yards" // (Leave as is) - If you want metric instead of imperial, change it in GSPro itself
 }

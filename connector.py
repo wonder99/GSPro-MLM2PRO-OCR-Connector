@@ -20,7 +20,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import threading
 from queue import Queue
 import select
-from pywinauto import application
+import pywinauto
 import psutil
 
 shot_q = Queue()
@@ -258,29 +258,28 @@ def process_gspro(resp):
                         if not gsp_stat.Putter:                    
                             print_colored_prefix(Color.GREEN, "MLM2PRO Connector ||", "Putting Mode")
                             gsp_stat.Putter = True
-                        if PUTTING_MODE ==1 and PUTTING_OPTIONS != 1:
+                        if PUTTING_MODE ==1 and PUTTING_OPTIONS != 1 and webcam_window is not None and gspro_window is not None:
                             try:
-                                app = application.Application()
-                                pid=application.findwindows.find_window(title_re='Putting View:.*')
-                                app.connect(handle=pid)
+                                app = pywinauto.Application()
+                                app.connect(handle=webcam_window)
                                 app_dialog = app.top_window()
-                                app_dialog.set_focus()
+                                if not app_dialog.has_focus():
+                                    app_dialog.set_focus()
                             except Exception as e:
                                 print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "Unable to find Putting View window")
                                 if EXTRA_DEBUG == 1:
                                     print(f"Exception: {e}")
-                                    for win in application.findwindows.find_elements():
+                                    for win in pywinauto.findwindows.find_elements():
                                         if 'PUTTING VIEW' in str(win).upper():
                                             print(str(win))
                     else:
                         if gsp_stat.Putter:
                             print_colored_prefix(Color.GREEN, "MLM2PRO Connector ||", "Full-shot Mode")
                             gsp_stat.Putter = False
-                        if PUTTING_MODE == 1 and PUTTING_OPTIONS != 1:
+                        if PUTTING_MODE == 1 and PUTTING_OPTIONS != 1 and webcam_window is not None and gspro_window is not None:
                             try:
-                                app = application.Application()
-                                pid=application.findwindows.find_window(title='GSPro')
-                                app.connect(handle=pid)
+                                app = pywinauto.Application()
+                                app.connect(handle=gspro_window)
                                 app_dialog = app.top_window()
                                 if not app_dialog.has_focus():
                                     app_dialog.set_focus()
@@ -288,7 +287,7 @@ def process_gspro(resp):
                                 print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "Unable to find GSPRO window")
                                 if EXTRA_DEBUG == 1:
                                     print(f"Exception: {e}")
-                                    for win in application.findwindows.find_elements():
+                                    for win in pywinauto.findwindows.find_elements():
                                         if 'GSPRO' in str(win).upper():
                                             print(str(win))
 
@@ -382,9 +381,13 @@ send_shots.gspro_connection_notified = False
 send_shots.shot_count = 1
 send_shots.create_socket = True
 send_shots.sock = None
-
+webcam_window = None
+gspro_window = None
 def main():
     global api
+    global webcam_window
+    global gspro_window
+        
     AUTOSHOT_DELAY = 4 # number of seconds between automatic shots
     try:
 
@@ -472,8 +475,44 @@ def main():
             else:
                 opt = exe + " " + BALL_TRACKING_OPTIONS
             try:
-                
                 os.spawnl(os.P_DETACH, exe, opt)
+                time.sleep(1)
+                webcam_window = None
+                gspro_window = None
+                for proc in psutil.process_iter():
+                    if 'ball_tracking' in str(proc.name):
+##                        print(proc.pid)
+                        try:
+                            webcam_window = pywinauto.findwindows.find_window(process=proc.pid, found_index=0)
+                        except pywinauto.findwindows.ElementAmbiguousError:
+                            if EXTRA_DEBUG:
+                                print("element Ambiguous")
+                            pass
+                        except pywinauto.findwindows.WindowAmbiguousError:
+                            if EXTRA_DEBUG:
+                                print("window Ambiguous")
+                            pass
+                        except pywinauto.findwindows.WindowNotFoundError:
+                            if EXTRA_DEBUG:
+                                print("Window Not found")
+                            pass
+                        except pywinauto.findwindows.ElementNotFoundError:
+                            if EXTRA_DEBUG:
+                                print("Element Not found")
+                            pass
+                    if 'GSPro.exe' in str(proc.name):
+                        try:
+                            gspro_window = pywinauto.findwindows.find_window(process=proc.pid)
+                        except Exception as e:
+                            if EXTRA_DEBUG:
+                                print("Exception {e} trying to find GSPRO window")
+                            pass
+
+                if not webcam_window:
+                    print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Could not find webcam window")
+                if not gspro_window:
+                    print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Could not find GSPro window")
+    
             except FileNotFoundError:
                 print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Could not find {exe} in the current directory")
 
