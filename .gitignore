@@ -1,0 +1,15 @@
+Tesseract-OCR/
+__pycache__/
+build/
+*.lnk
+dist/
+ball_tracking.exe
+config.ini
+error.png
+connector.spec
+doodee.wav
+settingsiPhone.json
+settingsS9.json
+build.bat
+settings.json.orig
+settingsTab.json

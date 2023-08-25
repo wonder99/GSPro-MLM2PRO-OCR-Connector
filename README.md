@@ -9,6 +9,7 @@ Required:
 	- 5KPlayer - https://www.5kplayer.com/
 - Android one of:
 	- SCRCPY - 'Screen Copy' via USB - https://github.com/Genymobile/scrcpy (also requires enabling of USB debugging mode in Developer options.  See https://developer.android.com/studio/debug/dev-options)
+	- EasyCast app from the play store
 
 2. Rapsodo MLM2PRO App
   - iPhone/iPad - https://apps.apple.com/us/app/rapsodo-mlm2pro/id1659665092
@@ -20,13 +21,6 @@ Required:
 	- justapotamus - https://justapotamusdesigns.com/collections/rapsodo-mlm2pro-ball-dots
 	- rapsodoballdots - https://rapsodoballdots.com/
 
-Optional:
-
-4. Putting
-- This connector will interface with the utility found here, which was created for the R10 https://github.com/alleexx/cam-putting-py/releases
-- See the readme at the above location for setup details
-- The putting server will start by default, but if you want to disable it, you can include "DISABLE_PUTTING" : 1 in the settings.json
-- Any putts detected while the putter isn't selected in GSPRO will be ignored
 
 Steps:
 
@@ -42,8 +36,27 @@ Steps:
 8. Run the MLM2PROConnectorV2.exe app file as ADMINISTRATOR (located in the previously downloaded/unzipped ZIP file) and wait for the "Press enter after you've hit your first shot" line to show.
 9. Take your first shot, wait for the numbers to populate on the Rapsodo Range in the MLM2PRO app and then press the Enter key.
 10. Set the ROIs for each shot metric one by one by creating rectangles around the desired value (See tutorial/example here - https://www.youtube.com/watch?v=zLptVv8umaU).  You can copy and paste the ROI values printed into your settings.json to avoid the need to select the boundaries each time.  If you get a misread shot, read the console to determine which one, then edit the ROI in your JSON.  The first two numbers are the X,Y location of the upper left corner, and the next two are width and height.  You can Ctrl-C to exit the connector and relaunch it to test your new ROI dimesions.
-11. Optional for putting: start the ball_tracking.exe from its installation directory.  Don't forget to specify your ball color preference on the command line (with -c <color>).  Note, -c calibrate is a handy utility to determine which color setting is best for your setup
-11. Done!
+11. Optional: Putting.
+There are two putting options for this connector: 
+	- Webcam-based putting via this utility https://github.com/alleexx/cam-putting-py/releases
+		- Including the line "PUTTING_MODE" : 1 in your settings.json will enable this mode
+		- The ball_tracking.exe is included in this download, and will start automatically
+		- If you want to disable it, you can set "PUTTING_MODE" : 0 in the settings.json
+		- See the readme at the above location for setup and usage details
+		- If you want to pass command-line arguments to ball_tracking.exe (such as to select ball color), you can add those in your settings.json with a line like this:  "BALL_TRACKING_OPTIONS" : "-c orange2",
+		- Any putts detected while the putter isn't selected in GSPRO will be ignored
+	- Exputt-based.  Exputt is a standalone putting simulator, which comes with its own putting surface and camera.  To use it, we must capture its HDMI signal on your PC, instead of feeding it to a TV or monitor
+		- Including the line "PUTTING_MODE" : 2 in your settings.json will enable this mode
+		- Example of an HDMI capture dongle is https://www.amazon.ca/dp/B0CDLS9YNF
+		- Using Exputt is similar to the MLM app except you capture the HDMI signal instead of mirroring the phone or tablet
+		- Windows includes an app called 'Camera' which we can use to view the HDMI signal from Exputt
+		- You will define a window name, its dimensions, and 4 ROI areas in the same was as for MLM app.  These are located in the same settings.json
+		- A setup demonstration is at https://www.youtube.com/watch?v=ajbW5WcIwCs
+		- Read the description in that video to see the step-by-step instructions
+		- The ROIs are easier to identify in Exputt because there is no extraneous text near the numbers
+		- Once the window name, dimensions and 4 EX_ROIs are set up, you don't need to edit the settings.json any more
+12. Done!
 
 NOTE: If you'd like console message to appear in color, double-click the console_colors.reg file included here
 NOTE: Make sure to have GSPro, GSPro Connect and the AirPlay receiver app open and running before opening the MLM2PROConnectorV2.exe app otherwise it will just close instantly after pressing enter to confirm your first shot.
+NOTE: If you need to kill this connector (via Ctrl-C), you will need to reset the GSPRO side by selecting "Settings, Game, Reset GSPRO Connect" before restarting this connector.
