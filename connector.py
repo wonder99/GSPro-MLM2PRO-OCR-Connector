@@ -34,7 +34,6 @@ class PuttHandler(BaseHTTPRequestHandler):
             response_code = 200
             message = '{"result" : "OK"}'
             res = json.loads(self.rfile.read(length))
-            #print(res)
 
             putt = {
                 "DeviceID": "Rapsodo MLM2PRO",
@@ -57,8 +56,8 @@ class PuttHandler(BaseHTTPRequestHandler):
             putt['BallData']['VLA'] = 0
             putt['ClubData'] = {}
             putt['ClubData']['Speed'] = float(res['ballData']['BallSpeed'])
-            putt['ClubData']['Path'] = 0
-            putt['ClubData']['FaceToTarget'] = 0
+            putt['ClubData']['Path'] = '-'
+            putt['ClubData']['FaceToTarget'] = '-'
             shot_q.put(putt)
 
         else:
@@ -68,7 +67,6 @@ class PuttHandler(BaseHTTPRequestHandler):
             message = '{"result" : "ERROR"}'
         self.send_response_only(response_code) # how to quiet this console message?
         self.end_headers()
-        #print(json.loads(message))
         self.wfile.write(str.encode(message))
 
 
@@ -328,7 +326,13 @@ def send_shots():
         vla= message['BallData']['VLA']
         club_speed= message['ClubData']['Speed']
         path_angle= message['ClubData']['Path']
+        if path_angle == '-':
+            del message['ClubData']['Path']
+            
         face_angle= message['ClubData']['FaceToTarget']
+        if face_angle == '-':
+            del message['ClubData']['FaceToTarget']
+
         message['ShotNumber'] = send_shots.shot_count
 
         # Ready to send.  Clear the received flag and send it
@@ -476,38 +480,43 @@ def main():
                 opt = exe + " " + BALL_TRACKING_OPTIONS
             try:
                 os.spawnl(os.P_DETACH, exe, opt)
-                time.sleep(1)
+                
+                time.sleep(2)
                 webcam_window = None
                 gspro_window = None
-                for proc in psutil.process_iter():
-                    if 'ball_tracking' in str(proc.name):
-##                        print(proc.pid)
-                        try:
-                            webcam_window = pywinauto.findwindows.find_window(process=proc.pid, found_index=0)
-                        except pywinauto.findwindows.ElementAmbiguousError:
-                            if EXTRA_DEBUG:
-                                print("element Ambiguous")
-                            pass
-                        except pywinauto.findwindows.WindowAmbiguousError:
-                            if EXTRA_DEBUG:
-                                print("window Ambiguous")
-                            pass
-                        except pywinauto.findwindows.WindowNotFoundError:
-                            if EXTRA_DEBUG:
-                                print("Window Not found")
-                            pass
-                        except pywinauto.findwindows.ElementNotFoundError:
-                            if EXTRA_DEBUG:
-                                print("Element Not found")
-                            pass
-                    if 'GSPro.exe' in str(proc.name):
-                        try:
-                            gspro_window = pywinauto.findwindows.find_window(process=proc.pid)
-                        except Exception as e:
-                            if EXTRA_DEBUG:
-                                print("Exception {e} trying to find GSPRO window")
-                            pass
-
+                end_time = time.perf_counter() + 4 # max 4 seconds to find the putting window.  1 sec is fine for me, 2 is needed for others
+                while time.perf_counter() < end_time and (webcam_window is None or gspro_window is None):
+                    for proc in psutil.process_iter():
+                        if not webcam_window and 'ball_tracking' in str(proc.name):
+                            try:
+                                webcam_window = pywinauto.findwindows.find_window(process=proc.pid, found_index=0)
+                            except pywinauto.findwindows.ElementAmbiguousError:
+                                if EXTRA_DEBUG:
+                                    print("element Ambiguous")
+                                pass
+                            except pywinauto.findwindows.WindowAmbiguousError:
+                                if EXTRA_DEBUG:
+                                    print("window Ambiguous")
+                                pass
+                            except pywinauto.findwindows.WindowNotFoundError:
+                                if EXTRA_DEBUG:
+                                    print("Window Not found")
+                                pass
+                            except pywinauto.findwindows.ElementNotFoundError:
+                                if EXTRA_DEBUG:
+                                    print("Element Not found")
+                                pass
+                        if not gspro_window and 'GSPro.exe' in str(proc.name):
+                            try:
+                                gspro_window = pywinauto.findwindows.find_window(process=proc.pid)
+                            except Exception as e:
+                                if EXTRA_DEBUG:
+                                    print("Exception {e} trying to find GSPRO window")
+                                pass
+                    time.sleep(.25)
+                if EXTRA_DEBUG:
+                    remainder = round(end_time - time.perf_counter(),2)
+                    print(f"Window searching finished with {remainder} seconds to spare")
                 if not webcam_window:
                     print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Could not find webcam window")
                 if not gspro_window:
@@ -549,9 +558,8 @@ def main():
                             result = [round(d/1.95+20), round(-26.6*d+10700), random.randint(-3,3),random.randint(-2,2),round(-0.1*d+41),round((d/1.85+20)/1.5)] # fake shot data
                         ball_speed, total_spin, spin_axis, hla, vla, club_speed = map(str, result)
 
-                #print(f"h1 res{result}")
-                path_angle = 0
-                face_angle = 0
+                path_angle = '-'
+                face_angle = '-'
             else: # putter is in use
                 if PUTTING_MODE == 2: # HDMI capture, such as ExPutt
                     while True :
@@ -566,7 +574,6 @@ def main():
                     result = []
                     for roi in ex_rois:
                         result.append(recognize_putt_roi(screenshot, roi))
-                    #print(f"cleaned {result}")
                     ball_speed, hla, path_angle, face_angle = map(str, result)
                     try:
                         ball_speed = float(ball_speed)
@@ -576,17 +583,13 @@ def main():
                             hla = float(hla[1:])
                         if ball_speed == 0 or ball_speed > 40 or hla < -20 or hla > 20:
                             raise ValueError
-                        if path_angle == '-':
-                            path_angle = 0
-                        else:
+                        if path_angle != '-':
                             if path_angle[0] == 'L':
                                 # left, negative for GSPRO
                                 path_angle = -float(path_angle[1:])
                             else:
                                 path_angle = float(path_angle[1:])
-                        if face_angle == '-':
-                            face_angle = 0
-                        else:
+                        if face_angle != '-':
                             if face_angle[0] == 'L':
                                 # left, negative for GSPRO
                                 face_angle = -float(face_angle[1:])
@@ -629,8 +632,6 @@ def main():
                 incomplete_data_displayed = False
                 shot_ready = True
             except Exception as e:
-                #print(e)
-                #print_colored_prefix(Color.RED,"MLM2PRO Connector ||", f"* Ball: {ball_speed} MPH, Spin: {total_spin} RPM, Axis: {spin_axis}°, HLA: {hla}°, VLA: {vla}°, Club: {club_speed} MPH, Path: {path_angle}°, Face: {face_angle}°")
                 if not incomplete_data_displayed:
                     screenshot_attempts += 1
                     sound_to_play.play()
@@ -677,18 +678,18 @@ def main():
                     "ShotNumber": 999,
                     "APIversion": "1",
                     "BallData": {
-                        "Speed": float(ball_speed),
-                        "SpinAxis": float(spin_axis),
-                        "TotalSpin": float(total_spin),
+                        "Speed": ball_speed,
+                        "SpinAxis": spin_axis,
+                        "TotalSpin": total_spin,
                         "BackSpin": round(total_spin * math.cos(math.radians(spin_axis))),
                         "SideSpin": round(total_spin * math.sin(math.radians(spin_axis))),
-                        "HLA": float(hla),
-                        "VLA": float(vla)
+                        "HLA": hla,
+                        "VLA": vla
                     },
                     "ClubData": {
-                        "Speed": float(club_speed),
-                        "Path": float(path_angle),
-                        "FaceToTarget": float(face_angle),
+                        "Speed": club_speed,
+                        "Path": path_angle,
+                        "FaceToTarget": face_angle,
                     },
                     "ShotDataOptions": {
                         "ContainsBallData": True,
@@ -698,7 +699,6 @@ def main():
                         "IsHeartBeat": False
                     }
                 }
-                
                 # Put this shot in the queue
                 shot_q.put(message)
                 send_shots()
