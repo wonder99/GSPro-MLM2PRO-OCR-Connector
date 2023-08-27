@@ -33,6 +33,7 @@
  
 // Options for PUTTING_MODE 2
  "EX_WINDOW_NAME": "Camera", // Use windows Camera application to display input from HDMI/USB dongle
+// "EX_WINDOW_NAME": "Cam\u00e9ra", // This is what it would look like for French mode, accent on the 'e'. See https://altcodeunicode.com/alt-codes-letter-e-with-accents/
  "EX_TARGET_WIDTH": 1920, // Width
  "EX_TARGET_HEIGHT": 1048, // Height
  //"EX_ROI1" : " 1600 , 134 , 121 , 58 ", // Ball Speed

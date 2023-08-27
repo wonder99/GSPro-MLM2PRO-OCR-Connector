@@ -598,16 +598,7 @@ def main():
                     except Exception as e:
                         if EXTRA_DEBUG:
                             print(f"Ignoring bad put reading. Result {result} Exception: {e}") # todo, this should be silent
-                        shot_ready = False
                         time.sleep(.5)
-                        ball_speed_last = ball_speed
-                        total_spin_last = total_spin
-                        spin_axis_last = spin_axis
-                        hla_last = hla
-                        vla_last = vla
-                        club_speed_last = club_speed
-                        path_angle_last = path_angle
-                        face_angle_last = face_angle
                         putter_in_use_last = gsp_stat.Putter
                         shot_ready = False
                         continue
