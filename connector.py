@@ -582,7 +582,7 @@ def main():
                         else:
                             hla = float(hla[1:])
                         if ball_speed == 0 or ball_speed > 40 or hla < -20 or hla > 20:
-                            raise ValueError
+                            raise ValueError(f"Ball: {ball_speed},  hla: {hla}")
                         if path_angle != '-':
                             if path_angle[0] == 'L':
                                 # left, negative for GSPRO
@@ -600,11 +600,16 @@ def main():
                             print(f"Ignoring bad put reading. Result {result} Exception: {e}") # todo, this should be silent
                         shot_ready = False
                         time.sleep(.5)
-                        continue
-                    except Exception as e:
-                        print(e)
+                        ball_speed_last = ball_speed
+                        total_spin_last = total_spin
+                        spin_axis_last = spin_axis
+                        hla_last = hla
+                        vla_last = vla
+                        club_speed_last = club_speed
+                        path_angle_last = path_angle
+                        face_angle_last = face_angle
+                        putter_in_use_last = gsp_stat.Putter
                         shot_ready = False
-                        time.sleep(.5)
                         continue
                     club_speed = ball_speed
                     total_spin = 0
