@@ -49,7 +49,9 @@ There are two putting options for this connector:
 		- Including the line "PUTTING_MODE" : 2 in your settings.json will enable this mode
 		- Example of an HDMI capture dongle is https://www.amazon.ca/dp/B0CDLS9YNF
 		- Using Exputt is similar to the MLM app except you capture the HDMI signal instead of mirroring the phone or tablet
+		- For now, Exputt needs to be set for Yards or Feet (Imperial, not metric)
 		- Windows includes an app called 'Camera' which we can use to view the HDMI signal from Exputt
+		- If your Windows is in French mode, there's an accent on the e of Camera. See settings.json for the fix
 		- You will define a window name, its dimensions, and 4 ROI areas in the same was as for MLM app.  These are located in the same settings.json
 		- A setup demonstration is at https://www.youtube.com/watch?v=ajbW5WcIwCs
 		- Read the description in that video to see the step-by-step instructions
