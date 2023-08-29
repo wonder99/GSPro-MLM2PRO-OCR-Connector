@@ -22,6 +22,7 @@ from queue import Queue
 import select
 import pywinauto
 import psutil
+from pathlib import Path
 
 shot_q = Queue()
 putter_in_use = False
@@ -135,6 +136,7 @@ PUTTING_MODE = settings.get("PUTTING_MODE")
 PUTTING_OPTIONS = settings.get("PUTTING_OPTIONS")
 EXTRA_DEBUG = settings.get("EXTRA_DEBUG")
 BALL_TRACKING_OPTIONS = settings.get("BALL_TRACKING_OPTIONS")
+SAVE_BAD_SCREENSHOTS = settings.get("SAVE_BAD_SCREENSHOTS")
 
 rois = []
 # Fill rois array from the json.  If ROI1 is present, assume they all are
@@ -180,7 +182,8 @@ def print_colored_prefix(color, prefix, message):
     print(f"{color}{prefix}{Color.RESET}", message)
 
 # Initialize tesseract API once and reuse
-api = tesserocr.PyTessBaseAPI(psm=tesserocr.PSM.SINGLE_WORD, lang='train', path=tesserocr.tesseract_cmd)
+#api = tesserocr.PyTessBaseAPI(psm=tesserocr.PSM.SINGLE_WORD, lang='train', path=tesserocr.tesseract_cmd)
+# see https://tesseract.patagames.com/help/html/T_Patagames_Ocr_Enums_PageSegMode.htm
 
 def select_roi(screenshot):
     plt.imshow(cv2.cvtColor(screenshot, cv2.COLOR_BGR2RGB))
@@ -192,32 +195,62 @@ def select_roi(screenshot):
     x2, y2 = map(int, roi[1])
     return (x1, y1, x2 - x1, y2 - y1)
 
+screenshot_folder = "bad_screenshots"
+def save_image(screenshot, roi, comment):
+    Path(screenshot_folder).mkdir(parents=True, exist_ok=True)
+    cropped_img = screenshot[roi[1]:roi[1]+roi[3], roi[0]:roi[0]+roi[2]]
+    fname=f"{screenshot_folder}\\{comment}_{roi[0]}_{roi[1]}_{roi[2]}_{roi[3]}_{random.randint(0,65536)}.png"
+    img = Image.fromarray(cropped_img)
+    img.save(fname, "PNG")
+    print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Saved suspect screenshot {fname}")    
+cnt=0    
 def recognize_roi(screenshot, roi):
+    global cnt
     # crop the roi from screenshot
     cropped_img = screenshot[roi[1]:roi[1]+roi[3], roi[0]:roi[0]+roi[2]]
     # use tesseract to recognize the text
     api.SetImage(Image.fromarray(cropped_img))
     result = api.GetUTF8Text()
+
+    if cnt < 4:
+        cnt += 1
+        plt.imshow(cv2.cvtColor(cropped_img, cv2.COLOR_BGR2RGB))
+        plt.show(block=True)
+        confidence = api.MeanTextConf()
+        save_image(screenshot, roi, "Full")
+        print(f"debug result: {result.strip()}  Confidence:{confidence}")
 
     # strip any trailing periods, and keep only one decimal place
     cleaned_result = re.findall(r"[-]?(?:\d*\.*\d)", result)
 
     if len(cleaned_result) == 0:
+        if SAVE_BAD_SCREENSHOTS:
+            save_image(screenshot, roi, "Full")
         return '-' # didn't find a valid number
     else :
         return cleaned_result[0]
 
+count=0
 def recognize_putt_roi(screenshot, roi):
+    global count
     # crop the roi from screenshot
     cropped_img = screenshot[roi[1]:roi[1]+roi[3], roi[0]:roi[0]+roi[2]]
     # use tesseract to recognize the text
     api.SetImage(Image.fromarray(cropped_img))
     result = api.GetUTF8Text()
-    #print(f"debug res: {result}")
+    if count < 4:
+        count += 1
+        plt.imshow(cv2.cvtColor(cropped_img, cv2.COLOR_BGR2RGB))
+        plt.show(block=True)
+        confidence = api.MeanTextConf()
+        save_image(screenshot, roi, "Putt")
+        print(f"debug result: {result.strip()}  Confidence:{confidence}")
     # strip any trailing periods, and keep only one decimal place
     cleaned_result = re.findall(r"[LR]?(?:\d*\.*\d)", result)
 
     if len(cleaned_result) == 0:
+        if SAVE_BAD_SCREENSHOTS:
+            save_image(screenshot, roi, "Putt")
         return '-' # didn't find a valid number
     else :
         return cleaned_result[0]
@@ -415,9 +448,6 @@ def main():
         # Create a ThreadPoolExecutor
         executor = ThreadPoolExecutor(max_workers=3)
 
-        # Set the path where you want to save the screenshots
-        screenshots_path = os.path.join(os.path.expanduser('~'), 'Downloads', 'Screenshots')
-
         print_colored_prefix(Color.GREEN, "GSPro ||", "Connecting to OpenConnect API ({}:{})...".format(HOST, PORT))
 
         # Run capture_window function in a separate thread
@@ -542,7 +572,7 @@ def main():
                             print(f"{e}. Retrying")
                         time.sleep(1)
 
-                    api = tesserocr.PyTessBaseAPI(psm=tesserocr.PSM.SINGLE_WORD, lang='train', path=tesserocr.tesseract_cmd)
+                    api = tesserocr.PyTessBaseAPI(psm=tesserocr.PSM.SPARSE_TEXT, lang='train', path=tesserocr.tesseract_cmd)
                     result = []
                     for roi in rois:
                         result.append(recognize_roi(screenshot, roi))
@@ -609,6 +639,7 @@ def main():
 
             # Check if any values are incomplete/incorrect
             try:
+                screenshot_attempts += 1
                 sound_to_play = Sounds.bad_capture # default error sound
                 if ball_speed == '-' and total_spin == '-' and spin_axis == '-' and hla == '-' and vla == '-' and club_speed == '-':
                     sound_to_play = Sounds.all_dashes
@@ -616,11 +647,32 @@ def main():
 
                 # Convert strings to floats
                 ball_speed = float(ball_speed)
+                if ball_speed > 200:
+                    # ball_speed, total_spin, spin_axis, hla, vla, club_speed
+                    if screenshot_attempts == 0 and SAVE_BAD_SCREENSHOTS:
+                        save_image(screenshot, rois[0], f"BallSpd{ball_speed}")
+                        print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Adjusting suspect ball speed {ball_speed}")
+                    ball_speed /= 10
+
                 total_spin = float(total_spin)
+                if total_spin > 15000:
+                    # ball_speed, total_spin, spin_axis, hla, vla, club_speed
+                    if screenshot_attempts == 0 and SAVE_BAD_SCREENSHOTS:
+                        save_image(screenshot, rois[1], f"Spin{total_spin}")
+                        print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Adjusting suspect ball spin {total_spin}")
+                    total_spin /= 10
+
                 spin_axis = float(spin_axis)
                 hla = float(hla)
                 vla = float(vla)
                 club_speed = float(club_speed)
+                if club_speed > 140:
+                    # ball_speed, total_spin, spin_axis, hla, vla, club_speed
+                    if screenshot_attempts == 0 and SAVE_BAD_SCREENSHOTS:
+                        save_image(screenshot, rois[5], f"Club Speed{club_speed}")
+                        print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Adjusting suspect club speed {club_speed}")
+                    club_speed /= 10
+                    
                 # HLA and spin axis could well be 0.0
                 if ball_speed == 0.0 or club_speed == 0.0:
                     raise ValueError("Club or ball speed was 0")
@@ -631,7 +683,7 @@ def main():
                 if not incomplete_data_displayed:
                     screenshot_attempts += 1
                     sound_to_play.play()
-                    print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "Invalid or incomplete data detected:")
+                    print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Invalid or incomplete data detected: {e}")
                     print_colored_prefix(Color.RED,"MLM2PRO Connector ||", f"* Ball: {ball_speed} MPH, Spin: {total_spin} RPM, Axis: {spin_axis}°, HLA: {hla}°, VLA: {vla}°, Club: {club_speed} MPH, Path: {path_angle}°, Face: {face_angle}°")
                     incomplete_data_displayed = True
                 shot_ready = False
