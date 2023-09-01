@@ -25,6 +25,9 @@ import psutil
 from pathlib import Path
 import chime
 
+# Print the temporary directory created at runtime, due to --onefile
+# print(os.listdir(sys._MEIPASS))
+
 chime.theme('big-sur')
 screenshot_folder = "bad_screenshots"
 shot_q = Queue()

@@ -1,0 +1,1 @@
+python -m PyInstaller --onefile connector.py --add-data %LOCALAPPDATA%\Programs\Python\Python39\Lib\site-packages\themes\big-sur;themes\big-sur
