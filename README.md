@@ -9,7 +9,7 @@ Required:
 	- 5KPlayer - https://www.5kplayer.com/
 - Android one of:
 	- SCRCPY - 'Screen Copy' via USB - https://github.com/Genymobile/scrcpy (also requires enabling of USB debugging mode in Developer options.  See https://developer.android.com/studio/debug/dev-options)
-	- EasyCast app from the play store
+	- EasyCast app from the play store (not as good as scrcpy)
 
 2. Rapsodo MLM2PRO App
   - iPhone/iPad - https://apps.apple.com/us/app/rapsodo-mlm2pro/id1659665092
@@ -31,22 +31,23 @@ Steps:
 5. Mirror your device screen using
 	- iPhone/iPad: AirPlay or 5KPlayer apps
 	- Android: EasyCast app or scrcpy via USB debugging mode
-6. Adjust the AirPlay/EasyCast window size so that the Rapsodo MLM2Pro App fills it out with little to no black borders/bars (Doesn't have to be perfect, the connector app will still work with black borders/bars but may not be as accurate) - (Example: https://ibb.co/DMHx12S).
+6. Adjust the AirPlay/scrcpy window size so that the Rapsodo MLM2Pro App fills it out with little to no black borders/bars (Doesn't have to be perfect, the connector app will still work with black borders/bars but may not be as accurate) - (Example: https://ibb.co/DMHx12S).
 7. Open GSPRO and GSPRO Connect Open API window (Go to Range or Local Match to test).
 8. Run the MLM2PROConnectorV2.exe app file as ADMINISTRATOR (located in the previously downloaded/unzipped ZIP file) and wait for the "Press enter after you've hit your first shot" line to show.
 9. Take your first shot, wait for the numbers to populate on the Rapsodo Range in the MLM2PRO app and then press the Enter key.
-10. Set the ROIs for each shot metric one by one by creating rectangles around the desired value (See tutorial/example here - https://www.youtube.com/watch?v=zLptVv8umaU).  You can copy and paste the ROI values printed into your settings.json to avoid the need to select the boundaries each time.  If you get a misread shot, read the console to determine which one, then edit the ROI in your JSON.  The first two numbers are the X,Y location of the upper left corner, and the next two are width and height.  You can Ctrl-C to exit the connector and relaunch it to test your new ROI dimesions.
+10. Set the ROIs for each shot metric one by one by creating rectangles around the desired value (See tutorial/example here - https://www.youtube.com/watch?v=zLptVv8umaU).  Make sure you leave room around the numbers and text, as shown.  You can copy and paste the ROI values printed into your settings.json to avoid the need to select the boundaries each time.  If you get a misread shot, read the console to determine which one, then edit the ROI in your JSON.  The first two numbers are the X,Y location of the upper left corner, and the next two are width and height.  You can Ctrl-C to exit the connector and relaunch it to test your new ROI dimesions.
 11. Optional: Putting.
 There are two putting options for this connector: 
 	- Webcam-based putting via this utility https://github.com/alleexx/cam-putting-py/releases
-		- Including the line "PUTTING_MODE" : 1 in your settings.json will enable this mode
+		- Including the line <code>"PUTTING_MODE" : 1,</code> in your settings.json will enable this mode
 		- The ball_tracking.exe is included in this download, and will start automatically
-		- If you want to disable it, you can set "PUTTING_MODE" : 0 in the settings.json
+		- If you want to disable it, you can set <code>"PUTTING_MODE" : 0,</code> in the settings.json
 		- See the readme at the above location for setup and usage details
-		- If you want to pass command-line arguments to ball_tracking.exe (such as to select ball color), you can add those in your settings.json with a line like this:  "BALL_TRACKING_OPTIONS" : "-c orange2",
+		- If you want to pass command-line arguments to ball_tracking.exe (such as to select ball color), you can add those in your settings.json with a line like this:  <code>"BALL_TRACKING_OPTIONS" : "-c orange2",</code>
+		- The webcam window will pop up when putter is selected in GSPRO.  To disable this behavior, add <code>"PUTTING_OPTIONS" : 0,</code> to your settings.json
 		- Any putts detected while the putter isn't selected in GSPRO will be ignored
 	- Exputt-based.  Exputt is a standalone putting simulator, which comes with its own putting surface and camera.  To use it, we must capture its HDMI signal on your PC, instead of feeding it to a TV or monitor
-		- Including the line "PUTTING_MODE" : 2 in your settings.json will enable this mode
+		- Including the line <code>"PUTTING_MODE" : 2,</code> in your settings.json will enable this mode
 		- Example of an HDMI capture dongle is https://www.amazon.ca/dp/B0CDLS9YNF
 		- Using Exputt is similar to the MLM app except you capture the HDMI signal instead of mirroring the phone or tablet
 		- For now, Exputt needs to be set for Yards or Feet (Imperial, not metric)
@@ -57,8 +58,11 @@ There are two putting options for this connector:
 		- Read the description in that video to see the step-by-step instructions
 		- The ROIs are easier to identify in Exputt because there is no extraneous text near the numbers
 		- Once the window name, dimensions and 4 EX_ROIs are set up, you don't need to edit the settings.json any more
-12. Done!
+12. Optional: if your MLM app is taking too long to draw the shot trace (current app version for android), you can enable the following setting in settings.json
+<code>  "AUDIBLE_MLM_READY" : 1,</code>
+This will give you an audible indication that MLM is still busy, then let you know when it's ready for the next shot.  The first time you try this option, it will prompt you for ROI7, which is the "Total distance" number from the MLM app.  Once done, copy and paste ROI7 into your settings.json for future sessions.
+13. Done!
 
 NOTE: If you'd like console message to appear in color, double-click the console_colors.reg file included here
 NOTE: Make sure to have GSPro, GSPro Connect and the AirPlay receiver app open and running before opening the MLM2PROConnectorV2.exe app otherwise it will just close instantly after pressing enter to confirm your first shot.
-NOTE: If you need to kill this connector (via Ctrl-C), you will need to reset the GSPRO side by selecting "Settings, Game, Reset GSPRO Connect" before restarting this connector.
+NOTE: If you need to kill this connector (via Ctrl-C), you will need to reset the GSPRO side by selecting "Settings, Game, Reset GSPRO Connect,Close" before restarting this connector.

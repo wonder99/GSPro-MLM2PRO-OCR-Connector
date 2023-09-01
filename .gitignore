@@ -13,3 +13,6 @@ settingsS9.json
 build.bat
 settings.json.orig
 settingsTab.json
+test_putt_images/
+test_full_images/
+saved/

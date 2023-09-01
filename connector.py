@@ -23,9 +23,16 @@ import select
 import pywinauto
 import psutil
 from pathlib import Path
+import chime
 
+chime.theme('big-sur')
+screenshot_folder = "bad_screenshots"
 shot_q = Queue()
 putter_in_use = False
+
+#https://tesseract.patagames.com/help/html/T_Patagames_Ocr_Enums_PageSegMode.htm
+PSM_FULL_SHOT = tesserocr.PSM.SINGLE_WORD
+PSM_PUTT = tesserocr.PSM.SINGLE_WORD
 
 class PuttHandler(BaseHTTPRequestHandler):
     
@@ -70,7 +77,6 @@ class PuttHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(str.encode(message))
 
-
 class PuttServer(threading.Thread):
     def run(self):
         self.server = ThreadingHTTPServer(('0.0.0.0', 8888), PuttHandler)
@@ -81,28 +87,9 @@ class PuttServer(threading.Thread):
         print_colored_prefix(Color.RED, "Putting Server ||", "Shutting down")
         self.server.shutdown()
 
-from pygame import mixer
-mixer.init()
-
-class Sounds:
-    all_dashes=mixer.Sound("deedoo.wav") # Rapsodo range shows all dashes for a 'no-read'
-    bad_capture=mixer.Sound("3tone.wav") # One or more data fields was interpreted incorrectly
-
 class TestModes :
     none = 0
     auto_shot = 1 # allows debugging without having to hit shots
-    
-test_mode = TestModes.none
-#test_mode = TestModes.auto_shot
-
-# Set the path to the Tesseract OCR executable and library
-tesseract_path = os.path.join(os.getcwd(), 'Tesseract-OCR')
-tessdata_path = os.path.join(tesseract_path, 'tessdata')
-tesseract_library = os.path.join(tesseract_path, 'libtesseract-5.dll')
-
-# Set the Tesseract OCR path for tesserocr
-tesserocr.tesseract_cmd = tessdata_path
-ctypes.cdll.LoadLibrary(tesseract_library)
 
 # Loading settings
 def load_settings():
@@ -137,28 +124,8 @@ PUTTING_OPTIONS = settings.get("PUTTING_OPTIONS")
 EXTRA_DEBUG = settings.get("EXTRA_DEBUG")
 BALL_TRACKING_OPTIONS = settings.get("BALL_TRACKING_OPTIONS")
 SAVE_BAD_SCREENSHOTS = settings.get("SAVE_BAD_SCREENSHOTS")
+AUDIBLE_MLM_READY = settings.get("AUDIBLE_MLM_READY")
 
-rois = []
-# Fill rois array from the json.  If ROI1 is present, assume they all are
-if settings.get("ROI1") :
-    rois.append(list(map(int,settings.get("ROI1").split(','))))
-    rois.append(list(map(int,settings.get("ROI2").split(','))))
-    rois.append(list(map(int,settings.get("ROI3").split(','))))
-    rois.append(list(map(int,settings.get("ROI4").split(','))))
-    rois.append(list(map(int,settings.get("ROI5").split(','))))
-    rois.append(list(map(int,settings.get("ROI6").split(','))))
-    print("Imported ROIs from JSON")
-
-ex_rois = []
-# Fill rois array from the json.  If ROI1 is present, assume they all are
-if settings.get("EX_ROI1") :
-    ex_rois.append(list(map(int,settings.get("EX_ROI1").split(','))))
-    ex_rois.append(list(map(int,settings.get("EX_ROI2").split(','))))
-    ex_rois.append(list(map(int,settings.get("EX_ROI3").split(','))))
-    ex_rois.append(list(map(int,settings.get("EX_ROI4").split(','))))
-    #ex_rois.append(list(map(int,settings.get("EX_ROI5").split(','))))
-    print("Imported Putting ROIs from JSON")
- 
 if not PORT:
     PORT=921
 if not HOST:
@@ -170,6 +137,43 @@ if not PUTTING_MODE:
 if not PUTTING_OPTIONS:
     PUTTING_OPTIONS = 0;  # 0 means control window focus when putting
     
+rois = []
+# Fill rois array from the json.  
+required_rois = 6
+if AUDIBLE_MLM_READY:
+    required_rois += 1
+if settings.get("ROI1"):
+    for i in range (1,required_rois+1):
+        roi = f"ROI{i}"
+        if settings.get(roi):
+            rois.append(list(map(int,settings.get(roi).split(','))))
+if len(rois) > 0:
+    print(f"Imported {len(rois)} ROIs from JSON")
+
+ex_rois = []
+# Fill rois array from the json.  If ROI1 is present, assume they all are
+if settings.get("EX_ROI1"):
+    for i in range (1,5):
+        ex_roi = f"EX_ROI{i}"
+        if settings.get(ex_roi):
+            ex_rois.append(list(map(int,settings.get(ex_roi).split(','))))
+if len(ex_rois) > 0:
+    print(f"Imported {len(ex_rois)} Putting ROIs from JSON")
+ 
+    
+test_mode = TestModes.none
+#test_mode = TestModes.auto_shot
+
+# Set the path to the Tesseract OCR executable and library
+tesseract_path = os.path.join(os.getcwd(), 'Tesseract-OCR')
+tessdata_path = os.path.join(tesseract_path, 'tessdata')
+tesseract_library = os.path.join(tesseract_path, 'libtesseract-5.dll')
+
+# Set the Tesseract OCR path for tesserocr
+tesserocr.tesseract_cmd = tessdata_path
+ctypes.cdll.LoadLibrary(tesseract_library)
+api = tesserocr.PyTessBaseAPI(psm=PSM_FULL_SHOT, lang='train', path=tesserocr.tesseract_cmd)
+
 class Color:
     RESET = '\033[0m'
     RED = '\033[91m'
@@ -181,10 +185,6 @@ class Color:
 def print_colored_prefix(color, prefix, message):
     print(f"{color}{prefix}{Color.RESET}", message)
 
-# Initialize tesseract API once and reuse
-#api = tesserocr.PyTessBaseAPI(psm=tesserocr.PSM.SINGLE_WORD, lang='train', path=tesserocr.tesseract_cmd)
-# see https://tesseract.patagames.com/help/html/T_Patagames_Ocr_Enums_PageSegMode.htm
-
 def select_roi(screenshot):
     plt.imshow(cv2.cvtColor(screenshot, cv2.COLOR_BGR2RGB))
     plt.show(block=False)
@@ -195,7 +195,6 @@ def select_roi(screenshot):
     x2, y2 = map(int, roi[1])
     return (x1, y1, x2 - x1, y2 - y1)
 
-screenshot_folder = "bad_screenshots"
 def save_image(screenshot, roi, comment):
     Path(screenshot_folder).mkdir(parents=True, exist_ok=True)
     cropped_img = screenshot[roi[1]:roi[1]+roi[3], roi[0]:roi[0]+roi[2]]
@@ -203,67 +202,53 @@ def save_image(screenshot, roi, comment):
     img = Image.fromarray(cropped_img)
     img.save(fname, "PNG")
     print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Saved suspect screenshot {fname}")    
-cnt=0    
+
 def recognize_roi(screenshot, roi):
-    global cnt
+    global api
     # crop the roi from screenshot
     cropped_img = screenshot[roi[1]:roi[1]+roi[3], roi[0]:roi[0]+roi[2]]
     # use tesseract to recognize the text
-    api.SetImage(Image.fromarray(cropped_img))
-    result = api.GetUTF8Text()
-
-    if cnt < 4:
-        cnt += 1
-        plt.imshow(cv2.cvtColor(cropped_img, cv2.COLOR_BGR2RGB))
-        plt.show(block=True)
-        confidence = api.MeanTextConf()
-        save_image(screenshot, roi, "Full")
-        print(f"debug result: {result.strip()}  Confidence:{confidence}")
+    img = Image.fromarray(cropped_img)
+    api.SetImage(img)
+    result = api.GetUTF8Text().strip()
 
     # strip any trailing periods, and keep only one decimal place
     cleaned_result = re.findall(r"[-]?(?:\d*\.*\d)", result)
 
     if len(cleaned_result) == 0:
-        if SAVE_BAD_SCREENSHOTS:
+        if SAVE_BAD_SCREENSHOTS and result != '-' and result != '' and result != '_':
             save_image(screenshot, roi, "Full")
         return '-' # didn't find a valid number
     else :
         return cleaned_result[0]
 
-count=0
 def recognize_putt_roi(screenshot, roi):
-    global count
     # crop the roi from screenshot
     cropped_img = screenshot[roi[1]:roi[1]+roi[3], roi[0]:roi[0]+roi[2]]
     # use tesseract to recognize the text
     api.SetImage(Image.fromarray(cropped_img))
-    result = api.GetUTF8Text()
-    if count < 4:
-        count += 1
-        plt.imshow(cv2.cvtColor(cropped_img, cv2.COLOR_BGR2RGB))
-        plt.show(block=True)
-        confidence = api.MeanTextConf()
-        save_image(screenshot, roi, "Putt")
-        print(f"debug result: {result.strip()}  Confidence:{confidence}")
+    result = api.GetUTF8Text().strip()
     # strip any trailing periods, and keep only one decimal place
     cleaned_result = re.findall(r"[LR]?(?:\d*\.*\d)", result)
 
     if len(cleaned_result) == 0:
-        if SAVE_BAD_SCREENSHOTS:
+        if SAVE_BAD_SCREENSHOTS and result != '' and result != '-' and result != '_':
             save_image(screenshot, roi, "Putt")
         return '-' # didn't find a valid number
     else :
         return cleaned_result[0]
-    
+
 class c_GSPRO_Status:
     Ready = True
     ShotReceived = False
     ReadyTime = 0
     Putter = False
     DistToPin = 200
+    RollingOut = False
 
 gsp_stat = c_GSPRO_Status()
 gsp_stat.Putter = False
+gsp_stat.Ready = test_mode == TestModes.auto_shot
 
 def process_gspro(resp):
     global putter_in_use
@@ -281,10 +266,10 @@ def process_gspro(resp):
                 code_200_found = True
             if msg['Code'] == 201:
                 gsp_stat.Ready = True
-                gsp_stat.ReadyTime = time.time()
+                gsp_stat.ReadyTime = time.perf_counter()
+                gsp_stat.RollingOut = True
                 gsp_stat.DistToPin = msg['Player']['DistanceToTarget']
                 if PUTTING_MODE != 0:
-                    #print(msg)
                     if msg['Player']['Club'] == "PT":
                         if not gsp_stat.Putter:                    
                             print_colored_prefix(Color.GREEN, "MLM2PRO Connector ||", "Putting Mode")
@@ -405,10 +390,11 @@ def send_shots():
             raise Exception
  
     except Exception as e:
-        print(f"debug: {e}")
+        if EXTRA_DEBUG:
+            print(f"send_shots: {e}")
         print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "No response from GSPRO. Retrying")
         if not send_shots.gspro_connection_notified:
-            Sounds.all_dashes.play()
+            chime.error()
             send_shots.gspro_connection_notified = True;
         send_shots.create_socket = True
 
@@ -425,7 +411,7 @@ def main():
     global webcam_window
     global gspro_window
         
-    AUTOSHOT_DELAY = 4 # number of seconds between automatic shots
+    AUTOSHOT_DELAY = 1 # number of seconds between automatic shots
     try:
 
         input("- Press enter after you've hit your first shot. -")
@@ -461,15 +447,16 @@ def main():
                     print(f"{e}. Retrying")
                 time.sleep(1)
         
-        values = ["Ball Speed", "Spin Rate", "Spin Axis", "Launch Direction (HLA)", "Launch Angle (VLA)", "Club Speed"]
+        values = ["Ball Speed", "Spin Rate", "Spin Axis", "Launch Direction (HLA)", "Launch Angle (VLA)", "Club Speed", "Total"]
 
         # Ask user to select ROIs for each value, if they weren't found in the json
-        if len(rois) == 0 :
-            for value in values:
-                print(f"Please select the ROI for {value}.")
+        i = 1
+        if len(rois) < required_rois :
+            for i in range(len(rois),required_rois):
+                print(f"Please select the ROI for {values[i]}.")
                 roi = select_roi(screenshot)
                 rois.append(roi)
-            print("You can paste these 6 lines into JSON")
+            print("You can paste these lines into JSON")
             i = 1
             for roi in rois:
                 print(f" \"ROI{i}\" : \"", roi[0],",",roi[1],",",roi[2],",",roi[3],"\",",end='')
@@ -556,11 +543,17 @@ def main():
                 print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Could not find {exe} in the current directory")
 
         putter_in_use_last = False
+        
+        last_sound=0            
         while True:
 
             # send any pending shots from the queue.  Will block while awaiting shot responses
             send_shots()
-            if not gsp_stat.Putter:            
+
+            if not gsp_stat.Putter:
+                if PUTTING_MODE == 2 and putter_in_use_last:
+                    api = tesserocr.PyTessBaseAPI(psm=PSM_FULL_SHOT, lang='train', path=tesserocr.tesseract_cmd)
+
                 # Run capture_window function in a separate thread
                 if test_mode != TestModes.auto_shot:
                     while True :
@@ -572,25 +565,46 @@ def main():
                             print(f"{e}. Retrying")
                         time.sleep(1)
 
-                    api = tesserocr.PyTessBaseAPI(psm=tesserocr.PSM.SPARSE_TEXT, lang='train', path=tesserocr.tesseract_cmd)
                     result = []
                     for roi in rois:
                         result.append(recognize_roi(screenshot, roi))
-                    ball_speed, total_spin, spin_axis, hla, vla, club_speed = map(str, result)
+                    if len(result) == 6:
+                        ball_speed, total_spin, spin_axis, hla, vla, club_speed= map(str, result)
+                    else:
+                        ball_speed, total_spin, spin_axis, hla, vla, club_speed, total_dist = map(str, result)
+                        # Send the periodic chime if still waiting for the ball to land in MLM app
+                        if AUDIBLE_MLM_READY and gsp_stat.RollingOut:
+                            now = time.perf_counter()
+                            if total_dist != '-':        # MLM is done with current shot
+                                gsp_stat.RollingOut = False
+                                if now - last_sound < 2: # as long as the last chime was from the current shot
+                                    chime.success(sync=True, raise_error=True)
+                            else:
+                                if now - last_sound > 1:
+                                    last_sound = now
+                                    chime.info(sync=True, raise_error=True)
+                                
                 else :
-                    if gsp_stat.Ready and (time.time() - gsp_stat.ReadyTime) > AUTOSHOT_DELAY:
+                    if gsp_stat.Ready and (time.perf_counter() - gsp_stat.ReadyTime) > AUTOSHOT_DELAY:
                         d = gsp_stat.DistToPin
                         if d > 300:
                             d = 300
                         if gsp_stat.Putter:
                             result = [1.5*d, 0, 0,random.randint(-2,2),0,4] # fake shot data
                         else:
+                            # general shots
                             result = [round(d/1.95+20), round(-26.6*d+10700), random.randint(-3,3),random.randint(-2,2),round(-0.1*d+41),round((d/1.85+20)/1.5)] # fake shot data
+                            # driver robot
+                            #result = [140+random.randint(-3,3), 2500+100*random.randint(-6,6), 0, 0, 12+random.randint(-3,3), 99+random.randint(-3,3)]
                         ball_speed, total_spin, spin_axis, hla, vla, club_speed = map(str, result)
 
                 path_angle = '-'
                 face_angle = '-'
             else: # putter is in use
+                if PUTTING_MODE == 2 and not putter_in_use_last:
+                    api = tesserocr.PyTessBaseAPI(psm=PSM_FULL_SHOT, lang='exputt', path=tesserocr.tesseract_cmd)
+
+                gsp_stat.RollingOut = False
                 if PUTTING_MODE == 2: # HDMI capture, such as ExPutt
                     while True :
                         try:
@@ -600,7 +614,7 @@ def main():
                         except Exception as e:
                             print(f"{e}. Retrying capture of putting screen")
                         time.sleep(1)
-                    api = tesserocr.PyTessBaseAPI(psm=tesserocr.PSM.SINGLE_WORD, lang='exputt', path=tesserocr.tesseract_cmd)            
+
                     result = []
                     for roi in ex_rois:
                         result.append(recognize_putt_roi(screenshot, roi))
@@ -627,7 +641,7 @@ def main():
                                 face_angle = float(face_angle[1:])
                     except Exception as e:
                         if EXTRA_DEBUG:
-                            print(f"Ignoring bad put reading. Result {result} Exception: {e}") # todo, this should be silent
+                            print(f"Ignoring bad put reading. Result {result} Exception: {e}") 
                         time.sleep(.5)
                         putter_in_use_last = gsp_stat.Putter
                         shot_ready = False
@@ -640,35 +654,35 @@ def main():
             # Check if any values are incomplete/incorrect
             try:
                 screenshot_attempts += 1
-                sound_to_play = Sounds.bad_capture # default error sound
                 if ball_speed == '-' and total_spin == '-' and spin_axis == '-' and hla == '-' and vla == '-' and club_speed == '-':
-                    sound_to_play = Sounds.all_dashes
                     raise ValueError
 
                 # Convert strings to floats
+                # protect against ROI misreads
                 ball_speed = float(ball_speed)
-                if ball_speed > 200:
+                while ball_speed > 200:
                     # ball_speed, total_spin, spin_axis, hla, vla, club_speed
-                    if screenshot_attempts == 0 and SAVE_BAD_SCREENSHOTS:
+                    if shot_ready == False and SAVE_BAD_SCREENSHOTS:
                         save_image(screenshot, rois[0], f"BallSpd{ball_speed}")
                         print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Adjusting suspect ball speed {ball_speed}")
                     ball_speed /= 10
-
+                    
                 total_spin = float(total_spin)
-                if total_spin > 15000:
+                while total_spin > 15000:
                     # ball_speed, total_spin, spin_axis, hla, vla, club_speed
-                    if screenshot_attempts == 0 and SAVE_BAD_SCREENSHOTS:
+                    if shot_ready == False and SAVE_BAD_SCREENSHOTS:
                         save_image(screenshot, rois[1], f"Spin{total_spin}")
-                        print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Adjusting suspect ball spin {total_spin}")
+                        print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Adjusting suspect total spin {total_spin}")
                     total_spin /= 10
 
                 spin_axis = float(spin_axis)
                 hla = float(hla)
                 vla = float(vla)
+                
                 club_speed = float(club_speed)
-                if club_speed > 140:
+                while club_speed > 140:
                     # ball_speed, total_spin, spin_axis, hla, vla, club_speed
-                    if screenshot_attempts == 0 and SAVE_BAD_SCREENSHOTS:
+                    if shot_ready == False and SAVE_BAD_SCREENSHOTS:
                         save_image(screenshot, rois[5], f"Club Speed{club_speed}")
                         print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Adjusting suspect club speed {club_speed}")
                     club_speed /= 10
@@ -682,16 +696,15 @@ def main():
             except Exception as e:
                 if not incomplete_data_displayed:
                     screenshot_attempts += 1
-                    sound_to_play.play()
+                    chime.error()
                     print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Invalid or incomplete data detected: {e}")
                     print_colored_prefix(Color.RED,"MLM2PRO Connector ||", f"* Ball: {ball_speed} MPH, Spin: {total_spin} RPM, Axis: {spin_axis}°, HLA: {hla}°, VLA: {vla}°, Club: {club_speed} MPH, Path: {path_angle}°, Face: {face_angle}°")
                     incomplete_data_displayed = True
                 shot_ready = False
                 continue
 
-            # if we just switched modes, make sure we don't submit a shot immediately
+            # If we just switched modes, make sure we don't submit a shot immediately
             if putter_in_use_last != gsp_stat.Putter:
-                # changed modes
                 ball_speed_last = ball_speed
                 total_spin_last = total_spin
                 spin_axis_last = spin_axis
@@ -773,7 +786,6 @@ def main():
                     proc = psutil.Process(proc.pid)
                     path=proc.exe()
                     proc.terminate()
-#                    os.spawnl(os.P_DETACH, path, 'none')
                     print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "Closed GSPconnect.exe.")
                     break
         except Exception as e:
@@ -784,8 +796,6 @@ def main():
             api.End()
             print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "Tesseract API ended...")
 
-        # Closing the socket will cause an unhandled exception in the GSPConnect.exe
-        # You can click Continue on the error prompt, and this connector can be relaunched
         if send_shots.sock:
             send_shots.sock.close()
             print_colored_prefix(Color.RED, "MLM2PRO Connector ||", "Socket connection closed...")
