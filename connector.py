@@ -668,7 +668,7 @@ def main():
                     if shot_ready == False and SAVE_BAD_SCREENSHOTS:
                         save_image(screenshot, rois[0], f"BallSpd{ball_speed}")
                         print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Adjusting suspect ball speed {ball_speed}")
-                    ball_speed /= 10
+                    ball_speed = round(ball_speed/10)
                     
                 total_spin = float(total_spin)
                 while total_spin > 15000:
@@ -676,7 +676,7 @@ def main():
                     if shot_ready == False and SAVE_BAD_SCREENSHOTS:
                         save_image(screenshot, rois[1], f"Spin{total_spin}")
                         print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Adjusting suspect total spin {total_spin}")
-                    total_spin /= 10
+                    total_spin = round(total_spin/10)
 
                 spin_axis = float(spin_axis)
                 hla = float(hla)
@@ -688,7 +688,7 @@ def main():
                     if shot_ready == False and SAVE_BAD_SCREENSHOTS:
                         save_image(screenshot, rois[5], f"Club Speed{club_speed}")
                         print_colored_prefix(Color.RED, "MLM2PRO Connector ||", f"Adjusting suspect club speed {club_speed}")
-                    club_speed /= 10
+                    club_speed = round(club_speed/10)
                     
                 # HLA and spin axis could well be 0.0
                 if ball_speed == 0.0 or club_speed == 0.0:
