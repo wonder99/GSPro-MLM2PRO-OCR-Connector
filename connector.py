@@ -129,15 +129,15 @@ BALL_TRACKING_OPTIONS = settings.get("BALL_TRACKING_OPTIONS")
 SAVE_BAD_SCREENSHOTS = settings.get("SAVE_BAD_SCREENSHOTS")
 AUDIBLE_MLM_READY = settings.get("AUDIBLE_MLM_READY")
 
-if not PORT:
+if PORT is None:
     PORT=921
-if not HOST:
+if HOST is None:
     HOST="127.0.0.1"
-if not METRIC:
+if METRIC is None:
     METRIC="Yards"
-if not PUTTING_MODE:
+if PUTTING_MODE is None:
     PUTTING_MODE = 1;     # 1 means enable webcam server
-if not PUTTING_OPTIONS:
+if PUTTING_OPTIONS is None:
     PUTTING_OPTIONS = 0;  # 0 means control window focus when putting
     
 rois = []
