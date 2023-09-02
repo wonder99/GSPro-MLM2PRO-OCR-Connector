@@ -60,7 +60,7 @@ There are two putting options for this connector:
 		- Once the window name, dimensions and 4 EX_ROIs are set up, you don't need to edit the settings.json any more
 12. Optional: if your MLM app is taking too long to draw the shot trace (current app version for android), you can enable the following setting in settings.json
 <code>  "AUDIBLE_MLM_READY" : 1,</code>
-This will give you an audible indication that MLM is still busy, then let you know when it's ready for the next shot.  The first time you try this option, it will prompt you for ROI7, which is the "Total distance" number from the MLM app.  Once done, copy and paste ROI7 into your settings.json for future sessions.
+This will give you an audible indication that MLM is still busy, then let you know when it's ready for the next shot.  The first time you try this option, it will prompt you for ROI7, which is the "Total distance" number from the MLM app.  Once done, copy and paste ROI7 into your settings.json for future sessions. See demo at https://youtu.be/QF0gxpWUhY8
 13. Done!
 
 NOTE: If you'd like console message to appear in color, double-click the console_colors.reg file included here
